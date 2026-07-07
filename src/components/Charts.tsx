@@ -1,10 +1,8 @@
 "use client";
 import {
   ResponsiveContainer,
-  ComposedChart,
   BarChart,
   Bar,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -22,7 +20,7 @@ const COLORES = ["#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ef4444", "#ec4899
 export function VentasBarChart({ data }: { data: PuntoDia[] }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <ComposedChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
         <XAxis dataKey="etiqueta" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
         <YAxis tickFormatter={(v) => formatNum(v)} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={54} />
@@ -30,8 +28,8 @@ export function VentasBarChart({ data }: { data: PuntoDia[] }) {
         <Legend wrapperStyle={{ fontSize: 12 }} />
         <Bar dataKey="ventas" name="Ventas" fill="#10b981" radius={[4, 4, 0, 0]} />
         <Bar dataKey="gastos" name="Gastos" fill="#ef4444" radius={[4, 4, 0, 0]} />
-        <Line type="monotone" dataKey="utilidad" name="Utilidad" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 2 }} />
-      </ComposedChart>
+        <Bar dataKey="utilidad" name="Utilidad" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+      </BarChart>
     </ResponsiveContainer>
   );
 }
@@ -60,23 +58,20 @@ export function IngresosMetodoChart({ data }: { data: { nombre: string; valor: n
 
 export function ComparativoChart({
   data,
-  labelActual,
-  labelAnterior,
 }: {
-  data: { concepto: string; actual: number; anterior: number }[];
-  labelActual: string;
-  labelAnterior: string;
+  data: { periodo: string; ventas: number; gastos: number; utilidad: number }[];
 }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-        <XAxis dataKey="concepto" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+        <XAxis dataKey="periodo" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
         <YAxis tickFormatter={(v) => formatNum(v)} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={54} />
         <Tooltip formatter={(v) => formatCOP(Number(v))} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
-        <Bar dataKey="anterior" name={labelAnterior} fill="#d6d3d1" radius={[4, 4, 0, 0]} />
-        <Bar dataKey="actual" name={labelActual} fill="#f59e0b" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="ventas" name="Ventas" fill="#10b981" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="gastos" name="Gastos" fill="#ef4444" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="utilidad" name="Utilidad" fill="#f59e0b" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

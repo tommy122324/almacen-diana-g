@@ -3,8 +3,9 @@ import ExcelJS from "exceljs";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { METODOS, METODO_LABEL } from "./types";
-import type { Venta, Gasto, Entrada } from "./types";
+import type { Venta, Gasto, Entrada, Apartado } from "./types";
 import type { Resumen, Periodo } from "./calc";
+import { variacion } from "./calc";
 import { formatCOP, formatFechaCorta } from "./format";
 
 interface DatosReporte {
@@ -154,4 +155,148 @@ export function exportarPDF(d: DatosReporte) {
   }
 
   doc.save(nombreArchivo(d, "pdf"));
+}
+
+function abonadoLocal(a: Apartado): number {
+  return a.abonos.reduce((s, ab) => s + ab.monto, 0);
+}
+
+/** PDF con la lista de pedidos. */
+export function exportarPedidosPDF(negocio: string, pedidos: Apartado[]) {
+  const doc = new jsPDF();
+  const M = 14;
+  doc.setFontSize(16);
+  doc.text(`Pedidos — ${negocio}`, M, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text(`Generado: ${formatFechaCorta(new Date().toISOString().slice(0, 10))} · ${pedidos.length} pedido(s)`, M, 25);
+  doc.setTextColor(0);
+
+  autoTable(doc, {
+    startY: 30,
+    head: [["Fecha", "Cliente", "Teléfono", "Pedido", "Valor", "Abonado", "Saldo", "Estado"]],
+    body: pedidos
+      .slice()
+      .sort((a, b) => a.fecha.localeCompare(b.fecha))
+      .map((p) => {
+        const ab = abonadoLocal(p);
+        const saldo = Math.max(0, p.valorTotal - ab);
+        return [
+          formatFechaCorta(p.fecha),
+          p.cliente,
+          p.telefono || "-",
+          p.descripcion || "-",
+          p.valorTotal > 0 ? formatCOP(p.valorTotal) : "-",
+          formatCOP(ab),
+          p.valorTotal > 0 ? formatCOP(saldo) : "-",
+          p.entregado ? "Entregado" : p.conseguido ? "Conseguido" : "Por conseguir",
+        ];
+      }),
+    theme: "striped",
+    headStyles: { fillColor: [217, 119, 6] },
+    styles: { fontSize: 9, cellPadding: 2 },
+    columnStyles: { 3: { cellWidth: 45 } },
+    margin: { left: M, right: M },
+  });
+
+  doc.save(`Pedidos_${negocio.replace(/[^\w]+/g, "_")}.pdf`);
+}
+
+interface DatosComparativo {
+  negocio: string;
+  tipoLabel: string; // "meses", "semanas", "días"
+  labelA: string;
+  labelB: string;
+  a: Resumen;
+  b: Resumen;
+}
+
+/** PDF con el comparativo entre dos periodos y su análisis. */
+export function exportarComparativoPDF(d: DatosComparativo) {
+  const doc = new jsPDF();
+  const M = 14;
+  doc.setFontSize(16);
+  doc.text(`Comparativo — ${d.negocio}`, M, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text(`Periodo 1: ${d.labelA}   vs   Periodo 2: ${d.labelB}`, M, 25);
+  doc.setTextColor(0);
+
+  const fila = (concepto: string, va: number, vb: number) => {
+    const v = variacion(va, vb);
+    const dif = v === null ? (vb === 0 && va > 0 ? "nuevo" : "—") : `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`;
+    return [concepto, formatCOP(va), formatCOP(vb), dif];
+  };
+
+  autoTable(doc, {
+    startY: 31,
+    head: [["Concepto", "Periodo 1", "Periodo 2", "Variación"]],
+    body: [
+      fila("Ventas", d.a.totalVentas, d.b.totalVentas),
+      fila("Entradas", d.a.totalEntradas, d.b.totalEntradas),
+      fila("Apartados (abonos)", d.a.totalAbonos, d.b.totalAbonos),
+      fila("Gastos", d.a.totalGastos, d.b.totalGastos),
+      fila("Utilidad", d.a.utilidad, d.b.utilidad),
+    ],
+    theme: "striped",
+    headStyles: { fillColor: [217, 119, 6] },
+    margin: { left: M, right: M },
+  });
+
+  // Ventas por método
+  const afterY = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  autoTable(doc, {
+    startY: afterY,
+    head: [["Método", "Periodo 1", "Periodo 2"]],
+    body: METODOS.map((m) => [METODO_LABEL[m], formatCOP(d.a.porMetodo[m]), formatCOP(d.b.porMetodo[m])]),
+    theme: "grid",
+    headStyles: { fillColor: [217, 119, 6] },
+    margin: { left: M, right: M },
+  });
+
+  // Análisis / conclusiones
+  let y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+  doc.setFontSize(13);
+  doc.text("Análisis", M, y);
+  y += 7;
+  doc.setFontSize(10);
+
+  const lineas: string[] = [];
+  const ganador =
+    d.a.utilidad === d.b.utilidad
+      ? "Ambos periodos tuvieron la misma utilidad."
+      : d.a.utilidad > d.b.utilidad
+        ? `El Periodo 1 ganó más: utilidad de ${formatCOP(d.a.utilidad)} vs ${formatCOP(d.b.utilidad)}.`
+        : `El Periodo 2 ganó más: utilidad de ${formatCOP(d.b.utilidad)} vs ${formatCOP(d.a.utilidad)}.`;
+  lineas.push(ganador);
+
+  const masVentas =
+    d.a.totalVentas === d.b.totalVentas
+      ? "Las ventas fueron iguales en ambos periodos."
+      : d.a.totalVentas > d.b.totalVentas
+        ? `Se vendió más en el Periodo 1 (${formatCOP(d.a.totalVentas)} vs ${formatCOP(d.b.totalVentas)}).`
+        : `Se vendió más en el Periodo 2 (${formatCOP(d.b.totalVentas)} vs ${formatCOP(d.a.totalVentas)}).`;
+  lineas.push(masVentas);
+
+  const masGastos =
+    d.a.totalGastos === d.b.totalGastos
+      ? "Los gastos fueron iguales."
+      : d.a.totalGastos > d.b.totalGastos
+        ? `Se gastó más en el Periodo 1 (${formatCOP(d.a.totalGastos)}).`
+        : `Se gastó más en el Periodo 2 (${formatCOP(d.b.totalGastos)}).`;
+  lineas.push(masGastos);
+
+  const vv = variacion(d.a.totalVentas, d.b.totalVentas);
+  if (vv !== null && vv !== 0) {
+    lineas.push(`Las ventas del Periodo 1 fueron ${Math.abs(vv).toFixed(0)}% ${vv > 0 ? "mayores" : "menores"} que el Periodo 2.`);
+  }
+
+  doc.setTextColor(40);
+  for (const l of lineas) {
+    const wrapped = doc.splitTextToSize(`• ${l}`, 180) as string[];
+    doc.text(wrapped, M, y);
+    y += wrapped.length * 6;
+  }
+
+  doc.save(`Comparativo_${d.negocio.replace(/[^\w]+/g, "_")}.pdf`);
 }

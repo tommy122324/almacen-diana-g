@@ -32,6 +32,10 @@ export const METODO_LABEL: Record<MetodoPago, string> = {
 
 export type EstadoApartado = "pendiente" | "completado";
 
+// "apartado": prenda que el cliente deja separada y va pagando.
+// "pedido": el cliente encarga algo específico; el abono no es obligatorio.
+export type TipoApartado = "apartado" | "pedido";
+
 export interface Negocio {
   id: string;
   nombre: string;
@@ -75,12 +79,16 @@ export interface Abono {
 export interface Apartado {
   id: string;
   negocioId: string;
-  fecha: string; // fecha en que se hizo el apartado
+  tipo: TipoApartado;
+  descripcion: string; // qué prenda(s) deja o qué pide el cliente
+  fecha: string; // fecha en que se hizo el apartado/pedido
   cliente: string;
   telefono: string;
   valorTotal: number;
   abonos: Abono[]; // pagos parciales; el primero es el abono inicial
   estado: EstadoApartado;
+  conseguido: boolean; // solo pedidos: si ya se consiguió/trajo a la tienda
+  entregado: boolean; // solo pedidos: si ya se entregó al cliente
   creadoEn: string;
 }
 

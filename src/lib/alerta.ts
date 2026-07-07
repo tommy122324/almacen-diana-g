@@ -24,6 +24,37 @@ export function avisarError(titulo = "Ocurrió un problema") {
   Toast.fire({ icon: "error", title: titulo });
 }
 
+/** Recordatorio en modal: NO se cierra solo, el usuario debe cerrarlo. */
+export function recordatorio(titulo: string, html?: string) {
+  return Swal.fire({
+    icon: "info",
+    title: titulo,
+    html,
+    confirmButtonText: "Entendido",
+    confirmButtonColor: "#f59e0b",
+  });
+}
+
+/** Diálogo de confirmación genérico. Devuelve true si el usuario acepta. */
+export async function confirmar(
+  titulo: string,
+  texto = "",
+  confirmText = "Sí",
+): Promise<boolean> {
+  const r = await Swal.fire({
+    title: titulo,
+    text: texto,
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonText: confirmText,
+    cancelButtonText: "Cancelar",
+    confirmButtonColor: "#f59e0b",
+    cancelButtonColor: "#a8a29e",
+    reverseButtons: true,
+  });
+  return r.isConfirmed;
+}
+
 /** Diálogo de confirmación para eliminar. Devuelve true si el usuario acepta. */
 export async function confirmarEliminar(
   texto = "Esta acción no se puede deshacer.",

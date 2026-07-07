@@ -1,14 +1,15 @@
 "use client";
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Package, Target, TrendingUp, Sparkles, ArrowRight } from "lucide-react";
-import { useStore, abonadoDe, saldoDe } from "@/lib/store";
+import { Package, ClipboardList, Target, TrendingUp, Sparkles, ArrowRight, FileText } from "lucide-react";
+import { useStore, saldoDe } from "@/lib/store";
 import { StatCard, Card, Boton, Input } from "@/components/ui";
 import { VentasBarChart, MetodosPieChart, ComparativoChart } from "@/components/Charts";
 import { MoneyInput } from "@/components/MoneyInput";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { METODO_LABEL, type MetodoPago } from "@/lib/types";
 import { avisar } from "@/lib/alerta";
+import { exportarComparativoPDF } from "@/lib/export";
 import {
   periodoDe,
   periodoAnterior,
@@ -72,10 +73,14 @@ export default function Panel() {
   }, [ventas, negocioId]);
   const progresoMeta = meta && meta.montoMeta > 0 ? Math.min(100, (ventasMes / meta.montoMeta) * 100) : 0;
 
-  // Apartados por cobrar
+  // Apartados y pedidos (separados)
   const apartadosNeg = apartados.filter((a) => a.negocioId === negocioId);
-  const porCobrar = apartadosNeg.filter((a) => a.estado === "pendiente").reduce((s, a) => s + saldoDe(a), 0);
-  const abonadoTotal = apartadosNeg.reduce((s, a) => s + abonadoDe(a), 0);
+  const soloApartados = apartadosNeg.filter((a) => a.tipo === "apartado");
+  const soloPedidos = apartadosNeg.filter((a) => a.tipo === "pedido");
+  const porCobrar = soloApartados.filter((a) => a.estado === "pendiente").reduce((s, a) => s + saldoDe(a), 0);
+  const apartadosPendientes = soloApartados.filter((a) => a.estado === "pendiente").length;
+  const pedidosPendientes = soloPedidos.filter((a) => !a.conseguido).length; // por conseguir
+  const pedidosPorCobrar = soloPedidos.filter((a) => a.estado === "pendiente").reduce((s, a) => s + saldoDe(a), 0);
 
   const varVentas = variacion(datos.r.totalVentas, datos.rp.totalVentas);
   const labelP = LABEL_PERIODO[tipo];
@@ -196,14 +201,30 @@ export default function Panel() {
         </Card>
 
         <Card>
-          <div className="mb-2 flex items-center gap-2 font-semibold text-stone-800">
-            <Package className="h-4 w-4 text-amber-600" /> Apartados por cobrar
+          <div className="mb-3 flex items-center justify-between">
+            <span className="font-semibold text-stone-800">Apartados y pedidos</span>
+            <Link href="/apartados" className="inline-flex items-center gap-1 text-sm font-semibold text-amber-700 hover:underline">
+              Ver todo <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </div>
-          <div className="text-2xl font-bold tabular-nums text-rose-600">{formatCOP(porCobrar)}</div>
-          <div className="mt-0.5 text-xs text-stone-400">Ya abonado: {formatCOP(abonadoTotal)}</div>
-          <Link href="/apartados" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-amber-700 hover:underline">
-            Ver apartados <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-xl bg-stone-50 p-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-stone-500">
+                <Package className="h-3.5 w-3.5 text-amber-600" /> Apartados
+              </div>
+              <div className="mt-1 text-xl font-bold tabular-nums text-rose-600">{formatCOP(porCobrar)}</div>
+              <div className="text-xs text-stone-400">{apartadosPendientes} por cobrar</div>
+            </div>
+            <div className="rounded-xl bg-stone-50 p-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-stone-500">
+                <ClipboardList className="h-3.5 w-3.5 text-amber-600" /> Pedidos
+              </div>
+              <div className="mt-1 text-xl font-bold tabular-nums text-amber-600">{pedidosPendientes}</div>
+              <div className="text-xs text-stone-400">
+                por conseguir{pedidosPorCobrar > 0 ? ` · ${formatCOP(pedidosPorCobrar)} por cobrar` : ""}
+              </div>
+            </div>
+          </div>
         </Card>
       </div>
 
@@ -252,7 +273,9 @@ function ComparativoCard() {
     return d.toLocaleDateString("sv");
   });
 
-  const { datos, pa, pb } = useMemo(() => {
+  const negocio = useStore((s) => s.negocios.find((n) => n.id === s.negocioActivoId)?.nombre ?? "Almacén Diana G");
+
+  const { datos, pa, pb, rA, rB } = useMemo(() => {
     const pa: Periodo = periodoDe(tipo, parseFecha(refA));
     const pb: Periodo = periodoDe(tipo, parseFecha(refB));
     const resu = (p: Periodo) =>
@@ -265,17 +288,30 @@ function ComparativoCard() {
     const rA = resu(pa);
     const rB = resu(pb);
     const datos = [
-      { concepto: "Ventas", actual: rA.totalVentas, anterior: rB.totalVentas },
-      { concepto: "Gastos", actual: rA.totalGastos, anterior: rB.totalGastos },
-      { concepto: "Utilidad", actual: rA.utilidad, anterior: rB.utilidad },
+      { periodo: "Periodo 1", ventas: rA.totalVentas, gastos: rA.totalGastos, utilidad: rA.utilidad },
+      { periodo: "Periodo 2", ventas: rB.totalVentas, gastos: rB.totalGastos, utilidad: rB.utilidad },
     ];
     return { datos, pa, pb, rA, rB };
   }, [tipo, refA, refB, ventas, gastos, entradas, apartados, negocioId]);
 
+  const labelA = `${formatFechaCorta(pa.desde)} a ${formatFechaCorta(pa.hasta)}`;
+  const labelB = `${formatFechaCorta(pb.desde)} a ${formatFechaCorta(pb.hasta)}`;
+  const ganador = rA.utilidad === rB.utilidad ? "empate" : rA.utilidad > rB.utilidad ? "Periodo 1" : "Periodo 2";
+
   return (
     <Card>
-      <div className="mb-3 flex items-center gap-2 font-semibold text-stone-800">
-        <TrendingUp className="h-4 w-4 text-amber-600" /> Comparar periodos
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 font-semibold text-stone-800">
+          <TrendingUp className="h-4 w-4 text-amber-600" /> Comparar periodos
+        </div>
+        <Boton
+          variant="outline"
+          onClick={() =>
+            exportarComparativoPDF({ negocio, tipoLabel: LABEL_PERIODO[tipo], labelA, labelB, a: rA, b: rB })
+          }
+        >
+          <FileText className="h-4 w-4" /> PDF del comparativo
+        </Boton>
       </div>
 
       <div className="mb-3 flex flex-wrap items-end gap-3">
@@ -301,11 +337,17 @@ function ComparativoCard() {
       </div>
 
       <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-stone-500">
-        <span><b className="text-amber-700">Periodo 1:</b> {formatFechaCorta(pa.desde)} a {formatFechaCorta(pa.hasta)}</span>
-        <span><b>Periodo 2:</b> {formatFechaCorta(pb.desde)} a {formatFechaCorta(pb.hasta)}</span>
+        <span><b className="text-amber-700">Periodo 1:</b> {labelA}</span>
+        <span><b>Periodo 2:</b> {labelB}</span>
       </div>
 
-      <ComparativoChart data={datos} labelActual="Periodo 1" labelAnterior="Periodo 2" />
+      <ComparativoChart data={datos} />
+
+      {ganador !== "empate" && (
+        <div className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          🏆 <b>{ganador}</b> tuvo más utilidad ({formatCOP(ganador === "Periodo 1" ? rA.utilidad : rB.utilidad)}).
+        </div>
+      )}
     </Card>
   );
 }

@@ -13,6 +13,7 @@ import type {
   Meta,
   Cuadre,
   MetodoPago,
+  TipoApartado,
 } from "./types";
 
 /** Suma de abonos de un apartado. */
@@ -81,6 +82,8 @@ interface State {
 
   // Apartados
   agregarApartado: (datos: {
+    tipo: TipoApartado;
+    descripcion: string;
     fecha: string;
     cliente: string;
     telefono: string;
@@ -91,8 +94,10 @@ interface State {
   abonarApartado: (id: string, fecha: string, monto: number, metodo: MetodoPago) => void;
   editarApartado: (
     id: string,
-    datos: { cliente: string; telefono: string; fecha: string; valorTotal: number },
+    datos: { cliente: string; telefono: string; fecha: string; valorTotal: number; descripcion: string },
   ) => void;
+  marcarConseguido: (id: string, conseguido: boolean) => void;
+  marcarEntregado: (id: string, entregado: boolean) => void;
   eliminarAbono: (apartadoId: string, abonoId: string) => void;
   eliminarApartado: (id: string) => void;
 
@@ -185,23 +190,27 @@ export const useStore = create<State>()(
         })),
       eliminarEntrada: (id) => set((s) => ({ entradas: s.entradas.filter((x) => x.id !== id) })),
 
-      agregarApartado: ({ fecha, cliente, telefono, valorTotal, abonoInicial, metodoInicial }) => {
+      agregarApartado: ({ tipo, descripcion, fecha, cliente, telefono, valorTotal, abonoInicial, metodoInicial }) => {
         const negocioId = get().negocioActivoId;
-        if (!negocioId || valorTotal <= 0) return;
+        if (!negocioId || !cliente.trim()) return;
         const abonos = abonoInicial > 0 ? [{ id: uid(), fecha, monto: abonoInicial, metodo: metodoInicial }] : [];
-        const estado = abonoInicial >= valorTotal ? "completado" : "pendiente";
+        const estado = valorTotal > 0 && abonoInicial >= valorTotal ? "completado" : "pendiente";
         set((s) => ({
           apartados: [
             ...s.apartados,
             {
               id: uid(),
               negocioId,
+              tipo,
+              descripcion: descripcion.trim(),
               fecha,
               cliente: cliente.trim() || "Sin nombre",
               telefono: telefono.trim(),
               valorTotal,
               abonos,
               estado,
+              conseguido: false,
+              entregado: false,
               creadoEn: ahora(),
             },
           ],
@@ -214,22 +223,23 @@ export const useStore = create<State>()(
             if (a.id !== id) return a;
             const abonos = [...a.abonos, { id: uid(), fecha, monto, metodo }];
             const total = abonos.reduce((t, ab) => t + ab.monto, 0);
-            return { ...a, abonos, estado: total >= a.valorTotal ? "completado" : "pendiente" };
+            return { ...a, abonos, estado: a.valorTotal > 0 && total >= a.valorTotal ? "completado" : "pendiente" };
           }),
         }));
       },
       editarApartado: (id, datos) =>
         set((s) => ({
           apartados: s.apartados.map((a) => {
-            if (a.id !== id || datos.valorTotal <= 0) return a;
+            if (a.id !== id) return a;
             const total = abonadoDe(a);
             return {
               ...a,
               cliente: datos.cliente.trim() || a.cliente,
               telefono: datos.telefono.trim(),
+              descripcion: datos.descripcion.trim(),
               fecha: datos.fecha,
               valorTotal: datos.valorTotal,
-              estado: total >= datos.valorTotal ? "completado" : "pendiente",
+              estado: datos.valorTotal > 0 && total >= datos.valorTotal ? "completado" : "pendiente",
             };
           }),
         })),
@@ -241,6 +251,15 @@ export const useStore = create<State>()(
             const total = abonos.reduce((t, ab) => t + ab.monto, 0);
             return { ...a, abonos, estado: total >= a.valorTotal ? "completado" : "pendiente" };
           }),
+        })),
+      marcarConseguido: (id, conseguido) =>
+        set((s) => ({
+          apartados: s.apartados.map((a) => (a.id === id ? { ...a, conseguido } : a)),
+        })),
+      marcarEntregado: (id, entregado) =>
+        set((s) => ({
+          // Al entregar, damos por conseguido también.
+          apartados: s.apartados.map((a) => (a.id === id ? { ...a, entregado, conseguido: entregado ? true : a.conseguido } : a)),
         })),
       eliminarApartado: (id) => set((s) => ({ apartados: s.apartados.filter((x) => x.id !== id) })),
 
