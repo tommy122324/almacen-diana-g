@@ -1,0 +1,18 @@
+# ─── Contabee 🐝 — docker-compose ───
+# Levanta la app ya compilada, igual que en producción.
+#   docker compose up --build
+# Requiere un archivo .env.local con las variables de Supabase.
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: contabee-web
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
