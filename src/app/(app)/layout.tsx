@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { useHydrated } from "@/lib/useHydrated";
-import { estaAutenticado, logout } from "@/lib/auth";
+import { usuarioActual, logout } from "@/lib/auth";
 import { confirmar } from "@/lib/alerta";
 import { Nav } from "@/components/Nav";
 import { BusinessSelector } from "@/components/BusinessSelector";
@@ -14,36 +14,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated();
   const router = useRouter();
   const [autorizado, setAutorizado] = useState(false);
-  const negocios = useStore((s) => s.negocios);
-  const crearNegocio = useStore((s) => s.crearNegocio);
+  const cargando = useStore((s) => s.cargando);
+  const cargado = useStore((s) => s.cargado);
+  const cargarDesdeSupabase = useStore((s) => s.cargarDesdeSupabase);
+  const limpiar = useStore((s) => s.limpiar);
 
-  // Protección: sin sesión local, al login.
+  // Protección: sin sesión de Supabase, al login. Con sesión, carga los datos.
   useEffect(() => {
     if (!hydrated) return;
-    if (estaAutenticado()) {
-      setAutorizado(true);
-    } else {
-      router.replace("/login");
-    }
-  }, [hydrated, router]);
-
-  // La primera vez, crea un negocio por defecto para poder empezar de inmediato.
-  useEffect(() => {
-    if (autorizado && negocios.length === 0) {
-      crearNegocio("Almacén Diana G");
-    }
-  }, [autorizado, negocios.length, crearNegocio]);
+    usuarioActual().then((u) => {
+      if (u) {
+        setAutorizado(true);
+        cargarDesdeSupabase();
+      } else {
+        router.replace("/login");
+      }
+    });
+  }, [hydrated, router, cargarDesdeSupabase]);
 
   async function salir() {
-    if (await confirmar("¿Cerrar sesión?", "Tendrás que volver a ingresar con tu usuario y contraseña.", "Sí, cerrar sesión")) {
-      logout();
+    if (await confirmar("¿Cerrar sesión?", "Tendrás que volver a ingresar con tu correo y contraseña.", "Sí, cerrar sesión")) {
+      await logout();
+      limpiar();
       router.replace("/login");
     }
   }
 
-  if (!hydrated || !autorizado) {
+  if (!hydrated || !autorizado || (cargando && !cargado)) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-50 text-4xl">🐝</div>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-stone-50">
+        <div className="text-4xl">🐝</div>
+        <div className="text-sm text-stone-400">Cargando tu negocio…</div>
+      </div>
     );
   }
 
@@ -65,8 +67,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           >
             <LogOut className="h-4 w-4" /> Cerrar sesión
           </button>
-          <div className="rounded-lg bg-stone-50 px-2 py-1.5 text-xs text-stone-400">
-            Modo local · datos en este equipo
+          <div className="rounded-lg bg-emerald-50 px-2 py-1.5 text-xs text-emerald-600">
+            ☁️ En la nube · guardado seguro
           </div>
         </div>
       </aside>

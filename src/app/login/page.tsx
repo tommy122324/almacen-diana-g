@@ -1,13 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Lock, User, LogIn } from "lucide-react";
-import { login, estaAutenticado } from "@/lib/auth";
+import { Eye, EyeOff, Lock, Mail, LogIn } from "lucide-react";
+import { login, usuarioActual } from "@/lib/auth";
 import { reproducirBienvenida } from "@/lib/voz";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [usuario, setUsuario] = useState("");
+  const [correo, setCorreo] = useState("");
   const [clave, setClave] = useState("");
   const [verClave, setVerClave] = useState(false);
   const [error, setError] = useState("");
@@ -15,20 +15,22 @@ export default function LoginPage() {
 
   // Si ya hay sesión, entrar directo.
   useEffect(() => {
-    if (estaAutenticado()) router.replace("/");
+    usuarioActual().then((u) => {
+      if (u) router.replace("/");
+    });
   }, [router]);
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setCargando(true);
-    const ok = await login(usuario, clave);
+    const { ok } = await login(correo, clave);
     setCargando(false);
     if (ok) {
       reproducirBienvenida(); // el clic del botón habilita el audio del navegador
       router.replace("/");
     } else {
-      setError("Usuario o contraseña incorrectos.");
+      setError("Correo o contraseña incorrectos.");
       setClave("");
     }
   }
@@ -44,15 +46,16 @@ export default function LoginPage() {
 
         <form onSubmit={entrar} className="space-y-4 rounded-2xl border border-stone-200 bg-white p-6 shadow-lg">
           <div>
-            <label className="mb-1 block text-xs font-medium text-stone-500">Usuario</label>
+            <label className="mb-1 block text-xs font-medium text-stone-500">Correo</label>
             <div className="relative">
-              <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
               <input
-                value={usuario}
-                onChange={(e) => setUsuario(e.target.value)}
+                type="email"
+                value={correo}
+                onChange={(e) => setCorreo(e.target.value)}
                 autoFocus
-                autoComplete="username"
-                placeholder="Tu usuario"
+                autoComplete="email"
+                placeholder="tucorreo@ejemplo.com"
                 className="w-full rounded-xl border border-stone-300 bg-white py-2.5 pl-9 pr-3 text-sm text-stone-800 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
               />
             </div>

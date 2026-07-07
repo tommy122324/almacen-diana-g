@@ -14,10 +14,10 @@ export function BusinessSelector() {
 
   const activo = negocios.find((n) => n.id === activoId);
 
-  function confirmarCrear() {
+  async function confirmarCrear() {
     if (nombre.trim()) {
-      const id = crear(nombre.trim());
-      setActivo(id);
+      const id = await crear(nombre.trim());
+      if (id) await setActivo(id);
     }
     setNombre("");
     setCreando(false);

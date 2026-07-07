@@ -1,36 +1,25 @@
 "use client";
-// ─── Contabee 🐝 — Autenticación LOCAL (fase local) ───
-// Barrera de acceso para el modo local. NO es seguridad de producción:
-// eso llega al conectar Supabase Auth. La contraseña no se guarda en texto
-// plano; se compara por hash SHA-256 con sal.
+// ─── Almacén Diana G 🐝 — Autenticación con Supabase (segura, en el servidor) ───
+import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
-const SALT = "contabee-2026";
-const USUARIO = "diana";
-const HASH = "1862befb52098094bb58429479954731fe56475f9d22d05d544ea6e3bc4768f0";
-const KEY = "contabee-auth";
-
-async function sha256(text: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+/** Inicia sesión con correo y contraseña. */
+export async function login(correo: string, clave: string): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await createClient().auth.signInWithPassword({
+    email: correo.trim(),
+    password: clave,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
-/** Verifica usuario y clave. Si son correctos, guarda la sesión local. */
-export async function login(usuario: string, clave: string): Promise<boolean> {
-  if (usuario.trim().toLowerCase() !== USUARIO) return false;
-  const h = await sha256(SALT + clave);
-  if (h === HASH) {
-    localStorage.setItem(KEY, JSON.stringify({ u: USUARIO, t: Date.now() }));
-    return true;
-  }
-  return false;
+/** Cierra la sesión. */
+export async function logout() {
+  await createClient().auth.signOut();
 }
 
-export function logout() {
-  localStorage.removeItem(KEY);
-}
-
-/** ¿Hay una sesión local activa? */
-export function estaAutenticado(): boolean {
-  if (typeof window === "undefined") return false;
-  return !!localStorage.getItem(KEY);
+/** Usuario actual (o null). */
+export async function usuarioActual(): Promise<User | null> {
+  const { data } = await createClient().auth.getUser();
+  return data.user ?? null;
 }

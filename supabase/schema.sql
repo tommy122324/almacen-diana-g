@@ -1,10 +1,9 @@
 -- ============================================================
--- Contabee 🐝 — Esquema de base de datos (PostgreSQL / Supabase)
+-- Almacén Diana G 🐝 — Esquema de base de datos (PostgreSQL / Supabase)
 -- ------------------------------------------------------------
 -- Multi-tenant con seguridad a nivel de fila (RLS).
--- Cada usuario solo puede ver/editar datos de los negocios
--- a los que pertenece (tabla "miembros").
--- Ejecuta este script en: Supabase → SQL Editor.
+-- Modelo "plano": cada registro guarda su fecha (sin tabla de días).
+-- Ejecuta este script completo en: Supabase → SQL Editor → Run.
 -- ============================================================
 
 -- ---------- Tipos ----------
@@ -13,16 +12,19 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create type metodo_pago as enum ('efectivo', 'credito', 'tarjeta', 'nequi', 'daviplata');
+  create type metodo_pago as enum ('efectivo', 'nequi', 'daviplata', 'tarjeta', 'credito', 'sistecredito', 'addi');
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create type estado_fiado as enum ('pendiente', 'pagado');
+  create type tipo_apartado as enum ('apartado', 'pedido');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type estado_apartado as enum ('pendiente', 'completado');
 exception when duplicate_object then null; end $$;
 
 -- ---------- Tablas ----------
 
--- Negocios
 create table if not exists public.negocios (
   id         uuid primary key default gen_random_uuid(),
   nombre     text not null,
@@ -30,7 +32,6 @@ create table if not exists public.negocios (
   creado_en  timestamptz not null default now()
 );
 
--- Miembros de cada negocio (con rol)
 create table if not exists public.miembros (
   id          uuid primary key default gen_random_uuid(),
   negocio_id  uuid not null references public.negocios(id) on delete cascade,
@@ -40,59 +41,61 @@ create table if not exists public.miembros (
   unique (negocio_id, usuario_id)
 );
 
--- Días (un registro por fecha por negocio)
-create table if not exists public.dias (
+create table if not exists public.ventas (
   id          uuid primary key default gen_random_uuid(),
   negocio_id  uuid not null references public.negocios(id) on delete cascade,
   fecha       date not null,
-  creado_en   timestamptz not null default now(),
-  unique (negocio_id, fecha)
-);
-
--- Ventas por método de pago (montos en COP, enteros)
-create table if not exists public.ventas (
-  id          uuid primary key default gen_random_uuid(),
-  dia_id      uuid not null references public.dias(id) on delete cascade,
   metodo      metodo_pago not null,
   monto       bigint not null check (monto >= 0),
   creado_por  uuid references auth.users(id),
   creado_en   timestamptz not null default now()
 );
 
--- Gastos (concepto libre + monto)
 create table if not exists public.gastos (
   id          uuid primary key default gen_random_uuid(),
-  dia_id      uuid not null references public.dias(id) on delete cascade,
+  negocio_id  uuid not null references public.negocios(id) on delete cascade,
+  fecha       date not null,
   concepto    text not null,
   monto       bigint not null check (monto >= 0),
   creado_por  uuid references auth.users(id),
   creado_en   timestamptz not null default now()
 );
 
--- Entradas / otros ingresos
 create table if not exists public.entradas (
   id          uuid primary key default gen_random_uuid(),
-  dia_id      uuid not null references public.dias(id) on delete cascade,
+  negocio_id  uuid not null references public.negocios(id) on delete cascade,
+  fecha       date not null,
   concepto    text not null,
   monto       bigint not null check (monto >= 0),
   creado_por  uuid references auth.users(id),
   creado_en   timestamptz not null default now()
 );
 
--- Fiados (crédito con seguimiento)
-create table if not exists public.fiados (
-  id          uuid primary key default gen_random_uuid(),
-  negocio_id  uuid not null references public.negocios(id) on delete cascade,
-  dia_id      uuid references public.dias(id) on delete set null,
-  cliente     text not null,
-  monto       bigint not null check (monto >= 0),
-  estado      estado_fiado not null default 'pendiente',
-  fecha_pago  date,
-  creado_por  uuid references auth.users(id),
-  creado_en   timestamptz not null default now()
+create table if not exists public.apartados (
+  id           uuid primary key default gen_random_uuid(),
+  negocio_id   uuid not null references public.negocios(id) on delete cascade,
+  tipo         tipo_apartado not null default 'apartado',
+  descripcion  text not null default '',
+  fecha        date not null,
+  cliente      text not null,
+  telefono     text not null default '',
+  valor_total  bigint not null default 0 check (valor_total >= 0),
+  estado       estado_apartado not null default 'pendiente',
+  conseguido   boolean not null default false,
+  entregado    boolean not null default false,
+  creado_por   uuid references auth.users(id),
+  creado_en    timestamptz not null default now()
 );
 
--- Metas de ventas mensuales
+create table if not exists public.abonos (
+  id           uuid primary key default gen_random_uuid(),
+  apartado_id  uuid not null references public.apartados(id) on delete cascade,
+  fecha        date not null,
+  monto        bigint not null check (monto >= 0),
+  metodo       metodo_pago not null default 'efectivo',
+  creado_en    timestamptz not null default now()
+);
+
 create table if not exists public.metas (
   id          uuid primary key default gen_random_uuid(),
   negocio_id  uuid not null references public.negocios(id) on delete cascade,
@@ -102,82 +105,54 @@ create table if not exists public.metas (
   unique (negocio_id, anio, mes)
 );
 
--- Cuadre de caja diario
-create table if not exists public.cuadre_caja (
-  id                 uuid primary key default gen_random_uuid(),
-  dia_id             uuid not null references public.dias(id) on delete cascade unique,
-  efectivo_esperado  bigint not null default 0,
-  efectivo_real      bigint not null default 0,
-  diferencia         bigint generated always as (efectivo_real - efectivo_esperado) stored,
-  creado_por         uuid references auth.users(id),
-  creado_en          timestamptz not null default now()
+create table if not exists public.cuadres (
+  id               uuid primary key default gen_random_uuid(),
+  negocio_id       uuid not null references public.negocios(id) on delete cascade,
+  fecha            date not null,
+  efectivo_real    bigint not null default 0,
+  base_siguiente   bigint not null default 0,
+  creado_por       uuid references auth.users(id),
+  creado_en        timestamptz not null default now(),
+  unique (negocio_id, fecha)
 );
 
--- Auditoría
-create table if not exists public.auditoria (
-  id           uuid primary key default gen_random_uuid(),
-  negocio_id   uuid references public.negocios(id) on delete cascade,
-  usuario_id   uuid references auth.users(id),
-  accion       text not null,
-  tabla        text not null,
-  registro_id  uuid,
-  detalle      jsonb,
-  fecha        timestamptz not null default now()
-);
-
--- ---------- Índices útiles ----------
+-- ---------- Índices ----------
 create index if not exists idx_miembros_usuario on public.miembros(usuario_id);
-create index if not exists idx_dias_negocio      on public.dias(negocio_id, fecha);
-create index if not exists idx_ventas_dia        on public.ventas(dia_id);
-create index if not exists idx_gastos_dia        on public.gastos(dia_id);
-create index if not exists idx_entradas_dia      on public.entradas(dia_id);
-create index if not exists idx_fiados_negocio    on public.fiados(negocio_id, estado);
+create index if not exists idx_ventas_neg_fecha  on public.ventas(negocio_id, fecha);
+create index if not exists idx_gastos_neg_fecha  on public.gastos(negocio_id, fecha);
+create index if not exists idx_entradas_neg_fecha on public.entradas(negocio_id, fecha);
+create index if not exists idx_apartados_negocio on public.apartados(negocio_id, estado);
+create index if not exists idx_abonos_apartado   on public.abonos(apartado_id);
+create index if not exists idx_cuadres_neg_fecha on public.cuadres(negocio_id, fecha);
 
 -- ============================================================
--- Funciones auxiliares de seguridad
+-- Funciones de seguridad
 -- ============================================================
 
--- ¿El usuario actual es miembro de este negocio?
 create or replace function public.es_miembro(negocio uuid)
-returns boolean
-language sql security definer stable
-set search_path = public
-as $$
+returns boolean language sql security definer stable set search_path = public as $$
   select exists (
     select 1 from public.miembros
     where negocio_id = negocio and usuario_id = auth.uid()
   );
 $$;
 
--- ¿El usuario actual es dueño o admin de este negocio?
 create or replace function public.es_admin(negocio uuid)
-returns boolean
-language sql security definer stable
-set search_path = public
-as $$
+returns boolean language sql security definer stable set search_path = public as $$
   select exists (
     select 1 from public.miembros
-    where negocio_id = negocio
-      and usuario_id = auth.uid()
-      and rol in ('dueño', 'admin')
+    where negocio_id = negocio and usuario_id = auth.uid() and rol in ('dueño', 'admin')
   );
 $$;
 
--- Devuelve el negocio_id al que pertenece un día
-create or replace function public.negocio_de_dia(dia uuid)
-returns uuid
-language sql security definer stable
-set search_path = public
-as $$
-  select negocio_id from public.dias where id = dia;
+create or replace function public.negocio_de_apartado(ap uuid)
+returns uuid language sql security definer stable set search_path = public as $$
+  select negocio_id from public.apartados where id = ap;
 $$;
 
--- Al crear un negocio, el creador se vuelve dueño automáticamente
+-- Al crear un negocio, el creador se vuelve dueño automáticamente.
 create or replace function public.registrar_dueno()
-returns trigger
-language plpgsql security definer
-set search_path = public
-as $$
+returns trigger language plpgsql security definer set search_path = public as $$
 begin
   insert into public.miembros (negocio_id, usuario_id, rol)
   values (new.id, new.dueno_id, 'dueño');
@@ -191,100 +166,75 @@ create trigger trg_registrar_dueno
   for each row execute function public.registrar_dueno();
 
 -- ============================================================
--- Row Level Security (RLS)
+-- Row Level Security
 -- ============================================================
 
-alter table public.negocios     enable row level security;
-alter table public.miembros     enable row level security;
-alter table public.dias         enable row level security;
-alter table public.ventas       enable row level security;
-alter table public.gastos       enable row level security;
-alter table public.entradas     enable row level security;
-alter table public.fiados       enable row level security;
-alter table public.metas        enable row level security;
-alter table public.cuadre_caja  enable row level security;
-alter table public.auditoria    enable row level security;
+alter table public.negocios  enable row level security;
+alter table public.miembros  enable row level security;
+alter table public.ventas    enable row level security;
+alter table public.gastos    enable row level security;
+alter table public.entradas  enable row level security;
+alter table public.apartados enable row level security;
+alter table public.abonos    enable row level security;
+alter table public.metas     enable row level security;
+alter table public.cuadres   enable row level security;
 
--- NEGOCIOS: ves los negocios donde eres miembro; puedes crear los tuyos.
+-- NEGOCIOS
 drop policy if exists neg_select on public.negocios;
-create policy neg_select on public.negocios for select
-  using (public.es_miembro(id));
-
+create policy neg_select on public.negocios for select using (public.es_miembro(id));
 drop policy if exists neg_insert on public.negocios;
-create policy neg_insert on public.negocios for insert
-  with check (dueno_id = auth.uid());
-
+create policy neg_insert on public.negocios for insert with check (dueno_id = auth.uid());
 drop policy if exists neg_update on public.negocios;
-create policy neg_update on public.negocios for update
-  using (public.es_admin(id));
-
+create policy neg_update on public.negocios for update using (public.es_admin(id));
 drop policy if exists neg_delete on public.negocios;
-create policy neg_delete on public.negocios for delete
-  using (dueno_id = auth.uid());
+create policy neg_delete on public.negocios for delete using (dueno_id = auth.uid());
 
--- MIEMBROS: ves los miembros de tus negocios; solo admin gestiona.
+-- MIEMBROS
 drop policy if exists miem_select on public.miembros;
-create policy miem_select on public.miembros for select
-  using (public.es_miembro(negocio_id));
-
+create policy miem_select on public.miembros for select using (public.es_miembro(negocio_id));
 drop policy if exists miem_admin on public.miembros;
 create policy miem_admin on public.miembros for all
-  using (public.es_admin(negocio_id))
-  with check (public.es_admin(negocio_id));
+  using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
 
--- DIAS
-drop policy if exists dias_all on public.dias;
-create policy dias_all on public.dias for all
-  using (public.es_miembro(negocio_id))
-  with check (public.es_miembro(negocio_id));
-
--- VENTAS / GASTOS / ENTRADAS (a través del día → negocio)
+-- VENTAS / GASTOS / ENTRADAS / APARTADOS / METAS / CUADRES (por negocio)
 drop policy if exists ventas_all on public.ventas;
 create policy ventas_all on public.ventas for all
-  using (public.es_miembro(public.negocio_de_dia(dia_id)))
-  with check (public.es_miembro(public.negocio_de_dia(dia_id)));
+  using (public.es_miembro(negocio_id)) with check (public.es_miembro(negocio_id));
 
 drop policy if exists gastos_all on public.gastos;
 create policy gastos_all on public.gastos for all
-  using (public.es_miembro(public.negocio_de_dia(dia_id)))
-  with check (public.es_miembro(public.negocio_de_dia(dia_id)));
+  using (public.es_miembro(negocio_id)) with check (public.es_miembro(negocio_id));
 
 drop policy if exists entradas_all on public.entradas;
 create policy entradas_all on public.entradas for all
-  using (public.es_miembro(public.negocio_de_dia(dia_id)))
-  with check (public.es_miembro(public.negocio_de_dia(dia_id)));
+  using (public.es_miembro(negocio_id)) with check (public.es_miembro(negocio_id));
 
--- FIADOS
-drop policy if exists fiados_all on public.fiados;
-create policy fiados_all on public.fiados for all
-  using (public.es_miembro(negocio_id))
-  with check (public.es_miembro(negocio_id));
+drop policy if exists apartados_all on public.apartados;
+create policy apartados_all on public.apartados for all
+  using (public.es_miembro(negocio_id)) with check (public.es_miembro(negocio_id));
 
--- METAS (solo admin edita; miembros leen)
-drop policy if exists metas_select on public.metas;
-create policy metas_select on public.metas for select
-  using (public.es_miembro(negocio_id));
+drop policy if exists metas_all on public.metas;
+create policy metas_all on public.metas for all
+  using (public.es_miembro(negocio_id)) with check (public.es_miembro(negocio_id));
 
-drop policy if exists metas_admin on public.metas;
-create policy metas_admin on public.metas for all
-  using (public.es_admin(negocio_id))
-  with check (public.es_admin(negocio_id));
+drop policy if exists cuadres_all on public.cuadres;
+create policy cuadres_all on public.cuadres for all
+  using (public.es_miembro(negocio_id)) with check (public.es_miembro(negocio_id));
 
--- CUADRE DE CAJA
-drop policy if exists cuadre_all on public.cuadre_caja;
-create policy cuadre_all on public.cuadre_caja for all
-  using (public.es_miembro(public.negocio_de_dia(dia_id)))
-  with check (public.es_miembro(public.negocio_de_dia(dia_id)));
-
--- AUDITORIA (solo lectura para miembros; escritura vía servidor)
-drop policy if exists audit_select on public.auditoria;
-create policy audit_select on public.auditoria for select
-  using (public.es_miembro(negocio_id));
-
-drop policy if exists audit_insert on public.auditoria;
-create policy audit_insert on public.auditoria for insert
-  with check (public.es_miembro(negocio_id));
+-- ABONOS (a través del apartado → negocio)
+drop policy if exists abonos_all on public.abonos;
+create policy abonos_all on public.abonos for all
+  using (public.es_miembro(public.negocio_de_apartado(apartado_id)))
+  with check (public.es_miembro(public.negocio_de_apartado(apartado_id)));
 
 -- ============================================================
--- Fin del esquema. Contabee 🐝
+-- Permisos para el rol de la app (la seguridad real la pone RLS)
+-- ============================================================
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on all tables in schema public to anon, authenticated;
+alter default privileges in schema public
+  grant select, insert, update, delete on tables to anon, authenticated;
+
+-- ============================================================
+-- Fin del esquema. Almacén Diana G 🐝
 -- ============================================================
