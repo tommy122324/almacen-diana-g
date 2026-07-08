@@ -109,8 +109,10 @@ create table if not exists public.cuadres (
   id               uuid primary key default gen_random_uuid(),
   negocio_id       uuid not null references public.negocios(id) on delete cascade,
   fecha            date not null,
-  efectivo_real    bigint not null default 0,
-  base_siguiente   bigint not null default 0,
+  efectivo_real    bigint not null default 0,   -- efectivo contado hoy en la caja
+  base_siguiente   bigint not null default 0,   -- (sin uso; se conserva por compatibilidad)
+  cuadrado         boolean,                      -- true = cuadró (verde), false = no cuadró (rojo)
+  diferencia       bigint not null default 0,   -- diferencia cuando NO cuadró (±)
   creado_por       uuid references auth.users(id),
   creado_en        timestamptz not null default now(),
   unique (negocio_id, fecha)

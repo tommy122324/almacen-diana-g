@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { Trash2, Plus, Pencil, Check, X, BarChart3 } from "lucide-react";
-import { useStore, baseInicialDe } from "@/lib/store";
+import { useStore, cajaAyerDe } from "@/lib/store";
 import { METODOS, METODO_LABEL, type MetodoPago } from "@/lib/types";
 import { formatCOP, formatFechaLarga } from "@/lib/format";
 import { hoyISO } from "@/lib/calc";
@@ -13,6 +13,7 @@ import { Card, Boton, Select, Input } from "@/components/ui";
 export default function RegistroDia() {
   const [fecha, setFecha] = useState(hoyISO());
   const [verGrafico, setVerGrafico] = useState(false);
+  const [calculando, setCalculando] = useState(false);
 
   const negocioId = useStore((s) => s.negocioActivoId);
   const ventas = useStore((s) => s.ventas);
@@ -64,13 +65,17 @@ export default function RegistroDia() {
     return METODOS.map((m) => ({ nombre: METODO_LABEL[m], valor: map[m] }));
   }, [dia]);
 
-  // Cuadre de caja con base rodante
-  const baseInicial = baseInicialDe(cuadres, negocioId, fecha);
-  const baseSiguiente = dia.cuadre?.baseSiguiente ?? 0;
+  // Cuadre de caja v2
+  const cajaAyer = cajaAyerDe(cuadres, negocioId, fecha);
+  const cajaHoy = dia.cuadre?.efectivoReal ?? 0; // lo que el usuario cuenta hoy
   const efectivoDia = dia.ventas.filter((v) => v.metodo === "efectivo").reduce((s, v) => s + v.monto, 0);
   const efectivoAbonos = dia.abonos.filter((ab) => (ab.metodo ?? "efectivo") === "efectivo").reduce((s, ab) => s + ab.monto, 0);
-  const efectivoEsperado = baseInicial + efectivoDia + efectivoAbonos + totalEntradas - totalGastos;
-  const efectivoNeto = efectivoEsperado - baseSiguiente; // ganancia real en efectivo tras dejar la base
+  // Utilidad en efectivo del día = ventas efectivo + abonos efectivo + entradas − gastos
+  const utilidadEfectivo = efectivoDia + efectivoAbonos + totalEntradas - totalGastos;
+  // Efectivo neto = utilidad efectivo + caja de ayer − caja de hoy
+  const efectivoNeto = utilidadEfectivo + cajaAyer - cajaHoy;
+  const cuadrado = dia.cuadre?.cuadrado ?? null;
+  const diferencia = dia.cuadre?.diferencia ?? 0;
 
   async function borrar(accion: () => void) {
     if (await confirmarEliminar()) {
@@ -161,7 +166,7 @@ export default function RegistroDia() {
           </Boton>
         </div>
         <p className="mb-3 text-xs text-stone-500">
-          Efectivo esperado = base de ayer + ventas efectivo + abonos efectivo + entradas − gastos.
+          Efectivo neto = utilidad en efectivo + caja de ayer − caja de hoy.
         </p>
 
         {/* Gráfico de ingresos por método (opcional) */}
@@ -172,58 +177,95 @@ export default function RegistroDia() {
           </div>
         )}
 
-        {/* Base inicial (viene de ayer) */}
-        <div className="mb-3 flex items-center justify-between rounded-xl bg-stone-50 px-3 py-2 text-sm">
-          <span className="text-stone-600">Base inicial (quedó de ayer)</span>
-          <span className="font-semibold tabular-nums text-stone-700">{formatCOP(baseInicial)}</span>
-        </div>
-
+        {/* Datos base */}
         <div className="grid gap-3 sm:grid-cols-3">
-          <div>
-            <div className="text-xs text-stone-500">Efectivo esperado</div>
-            <div className="mt-1 rounded-xl bg-stone-100 px-3 py-2.5 text-right font-semibold tabular-nums">
-              {formatCOP(efectivoEsperado)}
-            </div>
+          <div className="rounded-xl bg-stone-50 px-3 py-2">
+            <div className="text-xs text-stone-500">Caja de ayer</div>
+            <div className="mt-0.5 text-right font-semibold tabular-nums text-stone-700">{formatCOP(cajaAyer)}</div>
+          </div>
+          <div className="rounded-xl bg-stone-50 px-3 py-2">
+            <div className="text-xs text-stone-500">Utilidad en efectivo (hoy)</div>
+            <div className="mt-0.5 text-right font-semibold tabular-nums text-stone-700">{formatCOP(utilidadEfectivo)}</div>
           </div>
           <div>
-            <div className="text-xs text-stone-500">Efectivo contado (real)</div>
+            <div className="text-xs font-medium text-amber-700">¿Cuánto quedó hoy en la caja?</div>
             <MoneyInput
-              value={dia.cuadre?.efectivoReal ?? 0}
-              onChange={(n) => setCuadre(fecha, { efectivoReal: n })}
+              value={cajaHoy}
+              onChange={(n) => { setCuadre(fecha, { efectivoReal: n }); setCalculando(true); setTimeout(() => setCalculando(false), 700); }}
               className="mt-1"
             />
-          </div>
-          <div>
-            <div className="text-xs text-stone-500">Diferencia</div>
-            {(() => {
-              const dif = (dia.cuadre?.efectivoReal ?? 0) - efectivoEsperado;
-              const tone = dif === 0 ? "text-stone-600" : dif > 0 ? "text-emerald-600" : "text-rose-600";
-              return (
-                <div className={`mt-1 rounded-xl bg-stone-100 px-3 py-2.5 text-right font-semibold tabular-nums ${tone}`}>
-                  {dif > 0 ? "+" : ""}
-                  {formatCOP(dif)}
-                </div>
-              );
-            })()}
           </div>
         </div>
 
-        {/* Base para mañana + efectivo neto */}
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-            <div className="text-xs font-medium text-stone-600">Dinero que dejas en caja para mañana</div>
-            <MoneyInput
-              value={baseSiguiente}
-              onChange={(n) => setCuadre(fecha, { baseSiguiente: n })}
-              className="mt-1"
-            />
-            <div className="mt-1 text-[11px] text-stone-500">Se resta del efectivo y será la base de mañana.</div>
+        {/* Efectivo neto + ¿Cuadró? */}
+        <div
+          className={`mt-3 rounded-xl border-2 p-4 transition-colors ${
+            cuadrado === true ? "border-emerald-300 bg-emerald-50" : cuadrado === false ? "border-rose-300 bg-rose-50" : "border-stone-200 bg-stone-50"
+          }`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-medium text-stone-600">Efectivo neto del día</div>
+              {calculando ? (
+                <div className="mt-1 text-lg font-semibold text-stone-400">Calculando…</div>
+              ) : (
+                <div className={`mt-1 text-2xl font-bold tabular-nums ${efectivoNeto >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                  {formatCOP(efectivoNeto)}
+                </div>
+              )}
+            </div>
+            {!calculando && (
+              <div className="text-right">
+                <div className="mb-1 text-xs font-medium text-stone-600">¿La caja cuadró?</div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCuadre(fecha, { cuadrado: true, diferencia: 0 })}
+                    className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition ${cuadrado === true ? "bg-emerald-500 text-white" : "border border-stone-300 bg-white text-stone-600 hover:bg-emerald-50"}`}
+                  >
+                    Sí ✓
+                  </button>
+                  <button
+                    onClick={() => setCuadre(fecha, { cuadrado: false })}
+                    className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition ${cuadrado === false ? "bg-rose-500 text-white" : "border border-stone-300 bg-white text-stone-600 hover:bg-rose-50"}`}
+                  >
+                    No ✗
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-            <div className="text-xs font-medium text-stone-600">Efectivo neto del día (a retirar)</div>
-            <div className="mt-1 text-2xl font-bold tabular-nums text-emerald-700">{formatCOP(efectivoNeto)}</div>
-            <div className="mt-1 text-[11px] text-stone-500">Efectivo esperado − base para mañana.</div>
-          </div>
+
+          {/* Si NO cuadró: pedir la diferencia (con signo) */}
+          {cuadrado === false && (
+            <div className="mt-3 border-t border-rose-200 pt-3">
+              <div className="text-xs font-medium text-rose-700">¿Cuál fue la diferencia?</div>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <div className="flex rounded-lg border border-stone-300 bg-white p-0.5 text-sm">
+                  <button
+                    onClick={() => setCuadre(fecha, { diferencia: Math.abs(diferencia) })}
+                    className={`rounded-md px-3 py-1 font-semibold ${diferencia >= 0 ? "bg-emerald-500 text-white" : "text-stone-500"}`}
+                  >
+                    Sobró +
+                  </button>
+                  <button
+                    onClick={() => setCuadre(fecha, { diferencia: -Math.abs(diferencia) })}
+                    className={`rounded-md px-3 py-1 font-semibold ${diferencia < 0 ? "bg-rose-500 text-white" : "text-stone-500"}`}
+                  >
+                    Faltó −
+                  </button>
+                </div>
+                <MoneyInput
+                  value={Math.abs(diferencia)}
+                  onChange={(nv) => setCuadre(fecha, { diferencia: diferencia < 0 ? -nv : nv })}
+                  className="sm:w-40"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Estado del día */}
+          {cuadrado === true && <div className="mt-2 text-sm font-semibold text-emerald-700">🟢 Día cuadrado</div>}
+          {cuadrado === false && <div className="mt-2 text-sm font-semibold text-rose-700">🔴 Día con descuadre</div>}
         </div>
 
         {/* Total del día contando TODOS los métodos */}

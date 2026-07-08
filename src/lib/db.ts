@@ -61,7 +61,16 @@ function mMeta(r: Row): Meta {
   return { id: s(r.id), negocioId: s(r.negocio_id), anio: n(r.anio), mes: n(r.mes), montoMeta: n(r.monto_meta) };
 }
 function mCuadre(r: Row): Cuadre {
-  return { id: s(r.id), negocioId: s(r.negocio_id), fecha: s(r.fecha), efectivoReal: n(r.efectivo_real), baseSiguiente: n(r.base_siguiente), creadoEn: s(r.creado_en) };
+  return {
+    id: s(r.id),
+    negocioId: s(r.negocio_id),
+    fecha: s(r.fecha),
+    efectivoReal: n(r.efectivo_real),
+    baseSiguiente: n(r.base_siguiente),
+    cuadrado: r.cuadrado === null || r.cuadrado === undefined ? null : Boolean(r.cuadrado),
+    diferencia: n(r.diferencia),
+    creadoEn: s(r.creado_en),
+  };
 }
 function mNegocio(r: Row): Negocio {
   return { id: s(r.id), nombre: s(r.nombre), creadoEn: s(r.creado_en) };
@@ -241,15 +250,22 @@ export async function upsertMeta(m: { negocioId: string; anio: number; mes: numb
 }
 
 // ---------- Cuadres ----------
-export async function upsertCuadre(c: { negocioId: string; fecha: string; efectivoReal?: number; baseSiguiente?: number }): Promise<Cuadre> {
-  // Trae el actual para no pisar el otro campo
+export async function upsertCuadre(c: {
+  negocioId: string;
+  fecha: string;
+  efectivoReal?: number;
+  cuadrado?: boolean | null;
+  diferencia?: number;
+}): Promise<Cuadre> {
+  // Trae el actual para no pisar los otros campos
   const existente = await db().from("cuadres").select("*").eq("negocio_id", c.negocioId).eq("fecha", c.fecha).maybeSingle();
   const base = existente.data ? mCuadre(existente.data) : null;
   const fila = {
     negocio_id: c.negocioId,
     fecha: c.fecha,
     efectivo_real: c.efectivoReal ?? base?.efectivoReal ?? 0,
-    base_siguiente: c.baseSiguiente ?? base?.baseSiguiente ?? 0,
+    cuadrado: c.cuadrado !== undefined ? c.cuadrado : (base?.cuadrado ?? null),
+    diferencia: c.diferencia ?? base?.diferencia ?? 0,
   };
   const { data, error } = await db().from("cuadres").upsert(fila, { onConflict: "negocio_id,fecha" }).select().single();
   if (error) throw error;

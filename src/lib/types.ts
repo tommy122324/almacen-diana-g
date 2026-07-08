@@ -101,7 +101,9 @@ export interface Cuadre {
   id: string;
   negocioId: string;
   fecha: string;
-  efectivoReal: number;
-  baseSiguiente: number; // dinero que se deja en caja para el día siguiente
+  efectivoReal: number; // efectivo contado hoy en la caja (caja de hoy)
+  baseSiguiente: number; // sin uso (compatibilidad)
+  cuadrado: boolean | null; // true = cuadró (verde), false = no cuadró (rojo), null = sin decidir
+  diferencia: number; // diferencia cuando NO cuadró (±)
   creadoEn: string;
 }

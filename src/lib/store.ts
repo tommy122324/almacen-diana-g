@@ -25,13 +25,13 @@ export function abonadoDe(a: Apartado): number {
 export function saldoDe(a: Apartado): number {
   return Math.max(0, a.valorTotal - abonadoDe(a));
 }
-/** Base inicial de un día = la base que se dejó el día anterior más reciente con cuadre. */
-export function baseInicialDe(cuadres: Cuadre[], negocioId: string | null, fecha: string): number {
+/** Caja de ayer = el efectivo contado en el día anterior más reciente con cuadre. */
+export function cajaAyerDe(cuadres: Cuadre[], negocioId: string | null, fecha: string): number {
   if (!negocioId) return 0;
   const prev = cuadres
     .filter((c) => c.negocioId === negocioId && c.fecha < fecha)
     .sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
-  return prev?.baseSiguiente ?? 0;
+  return prev?.efectivoReal ?? 0;
 }
 
 function estadoDe(valorTotal: number, abonado: number): "pendiente" | "completado" {
@@ -86,7 +86,7 @@ interface State {
   eliminarApartado: (id: string) => Promise<void>;
 
   setMeta: (anio: number, mes: number, montoMeta: number) => Promise<void>;
-  setCuadre: (fecha: string, patch: { efectivoReal?: number; baseSiguiente?: number }) => Promise<void>;
+  setCuadre: (fecha: string, patch: { efectivoReal?: number; cuadrado?: boolean | null; diferencia?: number }) => Promise<void>;
 }
 
 async function conError(fn: () => Promise<void>) {

@@ -20,6 +20,7 @@ import {
   variacion,
   abonosEnPeriodo,
   abonosPorDia,
+  resumenEfectivo,
   hoyISO,
   LABEL_PERIODO,
   type Periodo,
@@ -30,10 +31,13 @@ const OPCIONES: { tipo: TipoPeriodo; label: string }[] = [
   { tipo: "dia", label: "Hoy" },
   { tipo: "semana", label: "Semana" },
   { tipo: "mes", label: "Mes" },
+  { tipo: "rango", label: "Fechas" },
 ];
 
 export default function Panel() {
   const [tipo, setTipo] = useState<TipoPeriodo>("mes");
+  const [rangoDesde, setRangoDesde] = useState(hoyISO());
+  const [rangoHasta, setRangoHasta] = useState(hoyISO());
   const [editandoMeta, setEditandoMeta] = useState(false);
   const [metaTmp, setMetaTmp] = useState(0);
 
@@ -42,10 +46,14 @@ export default function Panel() {
   const gastos = useStore((s) => s.gastos);
   const entradas = useStore((s) => s.entradas);
   const apartados = useStore((s) => s.apartados);
+  const cuadres = useStore((s) => s.cuadres);
   const metas = useStore((s) => s.metas);
   const setMeta = useStore((s) => s.setMeta);
 
-  const periodo = useMemo(() => periodoDe(tipo), [tipo]);
+  const periodo = useMemo<Periodo>(
+    () => (tipo === "rango" ? { desde: rangoDesde, hasta: rangoHasta } : periodoDe(tipo)),
+    [tipo, rangoDesde, rangoHasta],
+  );
   const periodoPrev = useMemo(() => periodoAnterior(tipo), [tipo]);
 
   const datos = useMemo(() => {
@@ -62,8 +70,9 @@ export default function Panel() {
       abonosEnPeriodo(apartados, negocioId, periodoPrev),
     );
     const serie = serieDiaria(v, g, e, periodo, abonosPorDia(apartados, negocioId, periodo));
-    return { v, g, e, r, rp, serie };
-  }, [ventas, gastos, entradas, apartados, negocioId, periodo, periodoPrev]);
+    const efectivo = resumenEfectivo(ventas, gastos, entradas, apartados, cuadres, negocioId, periodo);
+    return { v, g, e, r, rp, serie, efectivo };
+  }, [ventas, gastos, entradas, apartados, cuadres, negocioId, periodo, periodoPrev]);
 
   // Meta del mes actual
   const hoy = new Date();
@@ -143,12 +152,39 @@ export default function Panel() {
         </div>
       </div>
 
+      {/* Rango de fechas personalizado */}
+      {tipo === "rango" && (
+        <Card className="flex flex-wrap items-end gap-3">
+          <label className="text-sm text-stone-600">
+            <span className="mb-1 block text-xs font-medium text-stone-500">Desde</span>
+            <Input type="date" value={rangoDesde} onChange={(e) => setRangoDesde(e.target.value)} className="w-auto" />
+          </label>
+          <label className="text-sm text-stone-600">
+            <span className="mb-1 block text-xs font-medium text-stone-500">Hasta</span>
+            <Input type="date" value={rangoHasta} onChange={(e) => setRangoHasta(e.target.value)} className="w-auto" />
+          </label>
+          <span className="text-xs text-stone-400">{formatFechaCorta(periodo.desde)} a {formatFechaCorta(periodo.hasta)}</span>
+        </Card>
+      )}
+
       {/* Tarjetas */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard label="Ventas" value={datos.r.totalVentas} tone="green" hint={pctHint(datos.r.totalVentas, datos.rp.totalVentas)} />
         <StatCard label="Gastos" value={datos.r.totalGastos} tone="red" hint={pctHint(datos.r.totalGastos, datos.rp.totalGastos)} />
         <StatCard label="Entradas" value={datos.r.totalEntradas} tone="default" />
-        <StatCard label="Utilidad" value={datos.r.utilidad} tone={datos.r.utilidad >= 0 ? "amber" : "red"} hint={pctHint(datos.r.utilidad, datos.rp.utilidad)} />
+        <StatCard
+          label="Utilidad total"
+          value={datos.r.utilidad}
+          tone={datos.r.utilidad >= 0 ? "amber" : "red"}
+          hint={pctHint(datos.r.utilidad, datos.rp.utilidad)}
+        />
+        <StatCard
+          label="Efectivo neto total"
+          value={datos.efectivo.efectivoNeto}
+          tone={datos.efectivo.efectivoNeto >= 0 ? "green" : "red"}
+          hint={`(esperado en efectivo: ${formatCOP(datos.efectivo.esperadoEfectivo)})`}
+        />
+        <StatCard label="Abonos de apartados" value={datos.r.totalAbonos} tone="default" />
       </div>
 
       {/* Avance automático */}

@@ -13,7 +13,7 @@ import {
   subWeeks,
   subMonths,
 } from "date-fns";
-import type { Venta, Gasto, Entrada, MetodoPago, Apartado } from "./types";
+import type { Venta, Gasto, Entrada, MetodoPago, Apartado, Cuadre } from "./types";
 import { METODOS, METODO_LABEL } from "./types";
 
 export type TipoPeriodo = "dia" | "semana" | "mes" | "rango";
@@ -210,6 +210,47 @@ export function serieDiaria(
       utilidad: v + e + ab - g,
     };
   });
+}
+
+/**
+ * Efectivo del periodo:
+ * - esperadoEfectivo = suma de la utilidad en efectivo de cada día (lo que debería haber, se va sumando).
+ * - efectivoNeto = suma del efectivo neto de cada día con cuadre (utilidad efectivo + caja de ayer − caja de hoy).
+ */
+export function resumenEfectivo(
+  ventas: Venta[],
+  gastos: Gasto[],
+  entradas: Entrada[],
+  apartados: Apartado[],
+  cuadres: Cuadre[],
+  negocioId: string | null,
+  p: Periodo,
+): { esperadoEfectivo: number; efectivoNeto: number } {
+  if (!negocioId) return { esperadoEfectivo: 0, efectivoNeto: 0 };
+  const cajaAyerDe = (iso: string) => {
+    const prev = cuadres
+      .filter((c) => c.negocioId === negocioId && c.fecha < iso)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha))[0];
+    return prev?.efectivoReal ?? 0;
+  };
+  const dias = eachDayOfInterval({ start: parseISO(p.desde), end: parseISO(p.hasta) }).map((d) => format(d, "yyyy-MM-dd"));
+  let esperado = 0;
+  let neto = 0;
+  for (const iso of dias) {
+    const efVentas = ventas.filter((v) => v.negocioId === negocioId && v.fecha === iso && v.metodo === "efectivo").reduce((s, v) => s + v.monto, 0);
+    const efAbonos = apartados
+      .filter((a) => a.negocioId === negocioId)
+      .flatMap((a) => a.abonos)
+      .filter((ab) => ab.fecha === iso && (ab.metodo ?? "efectivo") === "efectivo")
+      .reduce((s, ab) => s + ab.monto, 0);
+    const ent = entradas.filter((e) => e.negocioId === negocioId && e.fecha === iso).reduce((s, e) => s + e.monto, 0);
+    const gas = gastos.filter((g) => g.negocioId === negocioId && g.fecha === iso).reduce((s, g) => s + g.monto, 0);
+    const utilEf = efVentas + efAbonos + ent - gas;
+    esperado += utilEf;
+    const cuadre = cuadres.find((c) => c.negocioId === negocioId && c.fecha === iso);
+    if (cuadre) neto += utilEf + cajaAyerDe(iso) - cuadre.efectivoReal;
+  }
+  return { esperadoEfectivo: esperado, efectivoNeto: neto };
 }
 
 /** Datos para la gráfica de torta por método de pago. */
