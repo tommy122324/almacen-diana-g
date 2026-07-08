@@ -2,13 +2,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
-import { LayoutDashboard, NotebookPen, Package, FileBarChart } from "lucide-react";
+import { LayoutDashboard, NotebookPen, Package, FileBarChart, Settings } from "lucide-react";
 
 const items = [
   { href: "/", label: "Panel", corto: "Panel", icon: LayoutDashboard },
   { href: "/dia", label: "Registro del día", corto: "Registro", icon: NotebookPen },
   { href: "/apartados", label: "Apartados", corto: "Apartados", icon: Package },
   { href: "/reportes", label: "Reportes", corto: "Reportes", icon: FileBarChart },
+  { href: "/ajustes", label: "Ajustes", corto: "Ajustes", icon: Settings },
 ];
 
 export function Nav() {

@@ -13,6 +13,7 @@ import type {
   Apartado,
   Meta,
   Cuadre,
+  Configuracion,
   MetodoPago,
   TipoApartado,
 } from "./types";
@@ -50,6 +51,8 @@ interface State {
   apartados: Apartado[];
   metas: Meta[];
   cuadres: Cuadre[];
+  config: Configuracion;
+  setConfig: (patch: Partial<Configuracion>) => Promise<void>;
 
   // Preferencia del panel (persiste al cambiar de pestaña)
   panelTipo: TipoPeriodo;
@@ -116,6 +119,14 @@ export const useStore = create<State>()((set, get) => ({
   apartados: [],
   metas: [],
   cuadres: [],
+  config: { whatsapp: "", correoCodigos: "" },
+  setConfig: (patch) =>
+    conError(async () => {
+      const negocioId = get().negocioActivoId;
+      if (!negocioId) return;
+      const config = await db.guardarConfig(negocioId, patch);
+      set({ config });
+    }),
 
   panelTipo: "mes",
   panelDesde: new Date().toLocaleDateString("sv"),
@@ -137,8 +148,8 @@ export const useStore = create<State>()((set, get) => ({
       }
       const prev = get().negocioActivoId;
       const activo = prev && negocios.some((x) => x.id === prev) ? prev : negocios[0].id;
-      const datos = await db.cargarTodo(activo);
-      set({ negocios, negocioActivoId: activo, ...datos, cargando: false, cargado: true });
+      const [datos, config] = await Promise.all([db.cargarTodo(activo), db.cargarConfig(activo)]);
+      set({ negocios, negocioActivoId: activo, ...datos, config, cargando: false, cargado: true });
     } catch (e) {
       console.error(e);
       avisarError("No se pudieron cargar los datos");
@@ -147,7 +158,7 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   limpiar: () =>
-    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [] }),
+    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [], config: { whatsapp: "", correoCodigos: "" } }),
 
   crearNegocio: async (nombre) => {
     try {
@@ -164,8 +175,8 @@ export const useStore = create<State>()((set, get) => ({
   setNegocioActivo: async (id) => {
     set({ negocioActivoId: id, cargando: true });
     try {
-      const datos = await db.cargarTodo(id);
-      set({ ...datos, cargando: false });
+      const [datos, config] = await Promise.all([db.cargarTodo(id), db.cargarConfig(id)]);
+      set({ ...datos, config, cargando: false });
     } catch (e) {
       console.error(e);
       set({ cargando: false });

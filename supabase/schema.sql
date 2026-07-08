@@ -229,6 +229,20 @@ create policy abonos_all on public.abonos for all
   using (public.es_miembro(public.negocio_de_apartado(apartado_id)))
   with check (public.es_miembro(public.negocio_de_apartado(apartado_id)));
 
+-- Configuración por negocio (WhatsApp del almacén, correo para códigos, etc.)
+create table if not exists public.configuracion (
+  negocio_id     uuid primary key references public.negocios(id) on delete cascade,
+  whatsapp       text not null default '',
+  correo_codigos text not null default '',
+  actualizado_en timestamptz not null default now()
+);
+alter table public.configuracion enable row level security;
+drop policy if exists config_select on public.configuracion;
+create policy config_select on public.configuracion for select using (public.es_miembro(negocio_id));
+drop policy if exists config_write on public.configuracion;
+create policy config_write on public.configuracion for all
+  using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
+
 -- ============================================================
 -- Permisos para el rol de la app (la seguridad real la pone RLS)
 -- ============================================================

@@ -13,6 +13,7 @@ import type {
   Abono,
   Meta,
   Cuadre,
+  Configuracion,
   MetodoPago,
   TipoApartado,
   EstadoApartado,
@@ -247,6 +248,26 @@ export async function upsertMeta(m: { negocioId: string; anio: number; mes: numb
     .single();
   if (error) throw error;
   return mMeta(data);
+}
+
+// ---------- Configuración ----------
+export async function cargarConfig(negocioId: string): Promise<Configuracion> {
+  const { data, error } = await db().from("configuracion").select("*").eq("negocio_id", negocioId).maybeSingle();
+  if (error) throw error;
+  return { whatsapp: s(data?.whatsapp), correoCodigos: s(data?.correo_codigos) };
+}
+
+export async function guardarConfig(negocioId: string, patch: Partial<Configuracion>): Promise<Configuracion> {
+  const actual = await cargarConfig(negocioId);
+  const fila = {
+    negocio_id: negocioId,
+    whatsapp: patch.whatsapp ?? actual.whatsapp,
+    correo_codigos: patch.correoCodigos ?? actual.correoCodigos,
+    actualizado_en: new Date().toISOString(),
+  };
+  const { data, error } = await db().from("configuracion").upsert(fila, { onConflict: "negocio_id" }).select().single();
+  if (error) throw error;
+  return { whatsapp: s(data.whatsapp), correoCodigos: s(data.correo_codigos) };
 }
 
 // ---------- Cuadres ----------

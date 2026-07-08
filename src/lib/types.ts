@@ -97,6 +97,11 @@ export interface Meta {
   montoMeta: number;
 }
 
+export interface Configuracion {
+  whatsapp: string; // número de WhatsApp del almacén
+  correoCodigos: string; // correo a donde llegan los códigos (Fase 7)
+}
+
 export interface Cuadre {
   id: string;
   negocioId: string;
