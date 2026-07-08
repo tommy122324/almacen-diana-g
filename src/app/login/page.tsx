@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, LogIn } from "lucide-react";
 import { login, usuarioActual } from "@/lib/auth";
-import { reproducirBienvenida } from "@/lib/voz";
+import { reproducirBienvenida, cebarVoz } from "@/lib/voz";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,6 +22,7 @@ export default function LoginPage() {
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault();
+    cebarVoz(); // desbloquea la voz DENTRO del gesto (clave para el celular)
     setError("");
     setCargando(true);
     const { ok } = await login(correo, clave);

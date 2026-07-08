@@ -1,7 +1,6 @@
-// ─── Contabee 🐝 — Exportar reportes a Excel y PDF ───
-import ExcelJS from "exceljs";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+// ─── Almacén Diana G 🐝 — Exportar reportes a Excel y PDF ───
+// Las librerías pesadas (exceljs, jspdf) se cargan SOLO al exportar (import dinámico),
+// para que la app inicie más liviana y rápida.
 import { METODOS, METODO_LABEL } from "./types";
 import type { Venta, Gasto, Entrada, Apartado } from "./types";
 import type { Resumen, Periodo } from "./calc";
@@ -34,8 +33,9 @@ function nombreArchivo(d: DatosReporte, ext: string): string {
 
 /** Genera y descarga un archivo Excel con resumen y detalle. */
 export async function exportarExcel(d: DatosReporte) {
+  const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Contabee";
+  wb.creator = "Almacén Diana G";
 
   // --- Hoja Resumen ---
   const rs = wb.addWorksheet("Resumen");
@@ -106,7 +106,9 @@ export async function exportarExcel(d: DatosReporte) {
 }
 
 /** Genera y descarga un PDF con resumen y detalle. */
-export function exportarPDF(d: DatosReporte) {
+export async function exportarPDF(d: DatosReporte) {
+  const { default: jsPDF } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
   const doc = new jsPDF();
   const M = 14;
   let y = 18;
@@ -162,7 +164,9 @@ function abonadoLocal(a: Apartado): number {
 }
 
 /** PDF con la lista de pedidos. */
-export function exportarPedidosPDF(negocio: string, pedidos: Apartado[]) {
+export async function exportarPedidosPDF(negocio: string, pedidos: Apartado[]) {
+  const { default: jsPDF } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
   const doc = new jsPDF();
   const M = 14;
   doc.setFontSize(16);
@@ -212,7 +216,9 @@ interface DatosComparativo {
 }
 
 /** PDF con el comparativo entre dos periodos y su análisis. */
-export function exportarComparativoPDF(d: DatosComparativo) {
+export async function exportarComparativoPDF(d: DatosComparativo) {
+  const { default: jsPDF } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
   const doc = new jsPDF();
   const M = 14;
   doc.setFontSize(16);
