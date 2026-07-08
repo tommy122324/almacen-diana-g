@@ -16,6 +16,7 @@ import type {
   MetodoPago,
   TipoApartado,
 } from "./types";
+import type { TipoPeriodo } from "./calc";
 
 /** Suma de abonos de un apartado. */
 export function abonadoDe(a: Apartado): number {
@@ -49,6 +50,12 @@ interface State {
   apartados: Apartado[];
   metas: Meta[];
   cuadres: Cuadre[];
+
+  // Preferencia del panel (persiste al cambiar de pestaña)
+  panelTipo: TipoPeriodo;
+  panelDesde: string;
+  panelHasta: string;
+  setPanelPeriodo: (p: { tipo?: TipoPeriodo; desde?: string; hasta?: string }) => void;
 
   cargarDesdeSupabase: () => Promise<void>;
   limpiar: () => void;
@@ -109,6 +116,16 @@ export const useStore = create<State>()((set, get) => ({
   apartados: [],
   metas: [],
   cuadres: [],
+
+  panelTipo: "mes",
+  panelDesde: new Date().toLocaleDateString("sv"),
+  panelHasta: new Date().toLocaleDateString("sv"),
+  setPanelPeriodo: (p) =>
+    set((s) => ({
+      panelTipo: p.tipo ?? s.panelTipo,
+      panelDesde: p.desde ?? s.panelDesde,
+      panelHasta: p.hasta ?? s.panelHasta,
+    })),
 
   cargarDesdeSupabase: async () => {
     set({ cargando: true });

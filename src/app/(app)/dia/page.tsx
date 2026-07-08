@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { Trash2, Plus, Pencil, Check, X, BarChart3 } from "lucide-react";
 import { useStore, cajaAyerDe } from "@/lib/store";
 import { METODOS, METODO_LABEL, type MetodoPago } from "@/lib/types";
@@ -65,9 +65,24 @@ export default function RegistroDia() {
     return METODOS.map((m) => ({ nombre: METODO_LABEL[m], valor: map[m] }));
   }, [dia]);
 
-  // Cuadre de caja v2
+  // Cuadre de caja v2 — la caja de hoy usa estado local + guardado con retraso (sin lentitud)
   const cajaAyer = cajaAyerDe(cuadres, negocioId, fecha);
-  const cajaHoy = dia.cuadre?.efectivoReal ?? 0; // lo que el usuario cuenta hoy
+  const cajaGuardada = dia.cuadre?.efectivoReal ?? 0;
+  const [cajaEdit, setCajaEdit] = useState<number | null>(null);
+  const cajaTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    setCajaEdit(null); // al cambiar de día, vuelve a tomar el valor guardado
+  }, [fecha]);
+  const cajaHoy = cajaEdit ?? cajaGuardada; // lo que el usuario cuenta hoy
+  function onCajaHoy(nv: number) {
+    setCajaEdit(nv);
+    setCalculando(true);
+    if (cajaTimer.current) window.clearTimeout(cajaTimer.current);
+    cajaTimer.current = window.setTimeout(() => {
+      setCuadre(fecha, { efectivoReal: nv });
+      setCalculando(false);
+    }, 500);
+  }
   const efectivoDia = dia.ventas.filter((v) => v.metodo === "efectivo").reduce((s, v) => s + v.monto, 0);
   const efectivoAbonos = dia.abonos.filter((ab) => (ab.metodo ?? "efectivo") === "efectivo").reduce((s, ab) => s + ab.monto, 0);
   // Utilidad en efectivo del día = ventas efectivo + abonos efectivo + entradas − gastos
@@ -189,11 +204,7 @@ export default function RegistroDia() {
           </div>
           <div>
             <div className="text-xs font-medium text-amber-700">¿Cuánto quedó hoy en la caja?</div>
-            <MoneyInput
-              value={cajaHoy}
-              onChange={(n) => { setCuadre(fecha, { efectivoReal: n }); setCalculando(true); setTimeout(() => setCalculando(false), 700); }}
-              className="mt-1"
-            />
+            <MoneyInput value={cajaHoy} onChange={onCajaHoy} className="mt-1" />
           </div>
         </div>
 

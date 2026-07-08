@@ -35,9 +35,10 @@ const OPCIONES: { tipo: TipoPeriodo; label: string }[] = [
 ];
 
 export default function Panel() {
-  const [tipo, setTipo] = useState<TipoPeriodo>("mes");
-  const [rangoDesde, setRangoDesde] = useState(hoyISO());
-  const [rangoHasta, setRangoHasta] = useState(hoyISO());
+  const tipo = useStore((s) => s.panelTipo);
+  const rangoDesde = useStore((s) => s.panelDesde);
+  const rangoHasta = useStore((s) => s.panelHasta);
+  const setPanelPeriodo = useStore((s) => s.setPanelPeriodo);
   const [editandoMeta, setEditandoMeta] = useState(false);
   const [metaTmp, setMetaTmp] = useState(0);
 
@@ -94,37 +95,37 @@ export default function Panel() {
   const varVentas = variacion(datos.r.totalVentas, datos.rp.totalVentas);
   const labelP = LABEL_PERIODO[tipo];
 
-  // Avance automático (insights)
+  // Resumen automático (mensajes genéricos, en tercera persona)
   const insights = useMemo(() => {
     const out: { emoji: string; texto: string }[] = [];
     if (varVentas !== null && datos.rp.totalVentas > 0) {
-      const signo = varVentas >= 0 ? "más" : "menos";
+      const flecha = varVentas >= 0 ? "▲" : "▼";
       out.push({
         emoji: varVentas >= 0 ? "📈" : "📉",
-        texto: `Vendiste ${Math.abs(varVentas).toFixed(0)}% ${signo} que el ${labelP} anterior (${formatCOP(datos.rp.totalVentas)}).`,
+        texto: `Ventas del ${labelP}: ${formatCOP(datos.r.totalVentas)} (${flecha} ${Math.abs(varVentas).toFixed(0)}% vs el ${labelP} anterior).`,
       });
     }
     // Mejor día
     if (tipo !== "dia" && datos.serie.length > 0) {
       const mejor = datos.serie.reduce((a, b) => (b.ventas > a.ventas ? b : a));
-      if (mejor.ventas > 0) out.push({ emoji: "⭐", texto: `Tu mejor día fue el ${mejor.etiqueta} con ${formatCOP(mejor.ventas)} en ventas.` });
+      if (mejor.ventas > 0) out.push({ emoji: "⭐", texto: `Día con más ventas: ${mejor.etiqueta} (${formatCOP(mejor.ventas)}).` });
     }
     // Método top
     const metodos = Object.entries(datos.r.porMetodo) as [MetodoPago, number][];
     const top = metodos.sort((a, b) => b[1] - a[1])[0];
     if (top && top[1] > 0) {
       const pct = datos.r.totalVentas > 0 ? (top[1] / datos.r.totalVentas) * 100 : 0;
-      out.push({ emoji: "💳", texto: `Tu método más usado fue ${METODO_LABEL[top[0]]} (${pct.toFixed(0)}% de las ventas).` });
+      out.push({ emoji: "💳", texto: `Método más usado: ${METODO_LABEL[top[0]]} (${pct.toFixed(0)}% de las ventas).` });
     }
     // Utilidad
     out.push({
       emoji: datos.r.utilidad >= 0 ? "✅" : "⚠️",
-      texto: `Tu utilidad en este ${labelP} es de ${formatCOP(datos.r.utilidad)}.`,
+      texto: `Utilidad del ${labelP}: ${formatCOP(datos.r.utilidad)}.`,
     });
     // Apartados
-    if (porCobrar > 0) out.push({ emoji: "📦", texto: `Tienes ${formatCOP(porCobrar)} por cobrar en apartados pendientes.` });
+    if (porCobrar > 0) out.push({ emoji: "📦", texto: `Apartados por cobrar: ${formatCOP(porCobrar)}.` });
     // Meta
-    if (meta && meta.montoMeta > 0) out.push({ emoji: "🎯", texto: `Vas al ${progresoMeta.toFixed(0)}% de tu meta del mes.` });
+    if (meta && meta.montoMeta > 0) out.push({ emoji: "🎯", texto: `Meta del mes: ${progresoMeta.toFixed(0)}% alcanzado.` });
     return out;
   }, [datos, varVentas, labelP, tipo, porCobrar, meta, progresoMeta]);
 
@@ -143,7 +144,7 @@ export default function Panel() {
           {OPCIONES.map((o) => (
             <button
               key={o.tipo}
-              onClick={() => setTipo(o.tipo)}
+              onClick={() => setPanelPeriodo({ tipo: o.tipo })}
               className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${tipo === o.tipo ? "bg-amber-500 text-white shadow-sm" : "text-stone-500 hover:bg-stone-100"}`}
             >
               {o.label}
@@ -157,11 +158,11 @@ export default function Panel() {
         <Card className="flex flex-wrap items-end gap-3">
           <label className="text-sm text-stone-600">
             <span className="mb-1 block text-xs font-medium text-stone-500">Desde</span>
-            <Input type="date" value={rangoDesde} onChange={(e) => setRangoDesde(e.target.value)} className="w-auto" />
+            <Input type="date" value={rangoDesde} onChange={(e) => setPanelPeriodo({ desde: e.target.value })} className="w-auto" />
           </label>
           <label className="text-sm text-stone-600">
             <span className="mb-1 block text-xs font-medium text-stone-500">Hasta</span>
-            <Input type="date" value={rangoHasta} onChange={(e) => setRangoHasta(e.target.value)} className="w-auto" />
+            <Input type="date" value={rangoHasta} onChange={(e) => setPanelPeriodo({ hasta: e.target.value })} className="w-auto" />
           </label>
           <span className="text-xs text-stone-400">{formatFechaCorta(periodo.desde)} a {formatFechaCorta(periodo.hasta)}</span>
         </Card>
@@ -190,7 +191,7 @@ export default function Panel() {
       {/* Avance automático */}
       <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-white">
         <div className="mb-2 flex items-center gap-2 font-semibold text-stone-800">
-          <Sparkles className="h-4 w-4 text-amber-500" /> Tu avance
+          <Sparkles className="h-4 w-4 text-amber-500" /> Resumen del periodo
         </div>
         <ul className="space-y-1.5">
           {insights.map((i, k) => (

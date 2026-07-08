@@ -1,12 +1,13 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Plus, Trash2, Phone, ChevronDown, ChevronUp, ChevronRight, CircleDollarSign, Pencil, Check, X, Package, ClipboardList, PackageCheck, FileText, RotateCcw } from "lucide-react";
+import { Plus, Trash2, Phone, ChevronDown, ChevronUp, ChevronRight, CircleDollarSign, Pencil, Check, X, Package, ClipboardList, PackageCheck, FileText, RotateCcw, MessageCircle } from "lucide-react";
 import { useStore, abonadoDe, saldoDe } from "@/lib/store";
 import { METODOS, METODO_LABEL, type Apartado, type MetodoPago, type TipoApartado } from "@/lib/types";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { hoyISO } from "@/lib/calc";
 import { avisar, confirmarEliminar } from "@/lib/alerta";
 import { exportarPedidosPDF } from "@/lib/export";
+import { abrirWhatsApp, mensajePedidoLlego } from "@/lib/whatsapp";
 import { MoneyInput } from "@/components/MoneyInput";
 import { Card, Boton, StatCard, Input, Field, Chip, Select, inputCls } from "@/components/ui";
 
@@ -347,7 +348,12 @@ function ApartadoCard({ apartado, onEliminar }: { apartado: Apartado; onEliminar
 
       {/* Flujo del pedido: por conseguir → conseguido → entregado */}
       {esPedido && (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3">
+          <PasosPedido conseguido={apartado.conseguido} entregado={apartado.entregado} />
+        </div>
+      )}
+      {esPedido && (
+        <div className="mt-2 flex flex-wrap gap-2">
           {!apartado.conseguido && (
             <Boton onClick={() => { marcarConseguido(apartado.id, true); avisar("¡Pedido conseguido! 🎉"); }}>
               <PackageCheck className="h-4 w-4" /> Marcar conseguido
@@ -355,8 +361,15 @@ function ApartadoCard({ apartado, onEliminar }: { apartado: Apartado; onEliminar
           )}
           {apartado.conseguido && !apartado.entregado && (
             <>
-              <Boton onClick={() => { marcarEntregado(apartado.id, true); avisar("¡Pedido entregado! ✅"); }}>
-                <Check className="h-4 w-4" /> Marcar entregado
+              <Boton
+                onClick={() => {
+                  // Abrir WhatsApp (dentro del gesto) y marcar entregado
+                  if (apartado.telefono) abrirWhatsApp(apartado.telefono, mensajePedidoLlego(apartado.descripcion));
+                  marcarEntregado(apartado.id, true);
+                  avisar("¡Pedido entregado! ✅");
+                }}
+              >
+                <Check className="h-4 w-4" /> Entregar + avisar por WhatsApp
               </Boton>
               <Boton variant="ghost" onClick={() => { marcarConseguido(apartado.id, false); avisar("Marcado por conseguir"); }}>
                 <RotateCcw className="h-4 w-4" /> Volver a por conseguir
@@ -364,9 +377,16 @@ function ApartadoCard({ apartado, onEliminar }: { apartado: Apartado; onEliminar
             </>
           )}
           {apartado.entregado && (
-            <Boton variant="ghost" onClick={() => { marcarEntregado(apartado.id, false); avisar("Reabierto"); }}>
-              <RotateCcw className="h-4 w-4" /> Reabrir (no entregado)
-            </Boton>
+            <>
+              {apartado.telefono && (
+                <Boton variant="outline" onClick={() => abrirWhatsApp(apartado.telefono, mensajePedidoLlego(apartado.descripcion))}>
+                  <MessageCircle className="h-4 w-4" /> Reenviar WhatsApp
+                </Boton>
+              )}
+              <Boton variant="ghost" onClick={() => { marcarEntregado(apartado.id, false); avisar("Reabierto"); }}>
+                <RotateCcw className="h-4 w-4" /> Reabrir
+              </Boton>
+            </>
           )}
         </div>
       )}
@@ -434,5 +454,27 @@ function ApartadoCard({ apartado, onEliminar }: { apartado: Apartado; onEliminar
         </div>
       )}
     </Card>
+  );
+}
+
+/** Indicador de pasos del pedido: Pedido → Conseguido → Entregado. */
+function PasosPedido({ conseguido, entregado }: { conseguido: boolean; entregado: boolean }) {
+  const pasos = [
+    { label: "Pedido", ok: true },
+    { label: "Conseguido", ok: conseguido },
+    { label: "Entregado", ok: entregado },
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-x-1 gap-y-1 text-xs">
+      {pasos.map((p, i) => (
+        <span key={i} className="flex items-center gap-1">
+          <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${p.ok ? "bg-emerald-500 text-white" : "bg-stone-200 text-stone-500"}`}>
+            {p.ok ? "✓" : i + 1}
+          </span>
+          <span className={p.ok ? "font-semibold text-emerald-700" : "text-stone-400"}>{p.label}</span>
+          {i < pasos.length - 1 && <span className="mx-1 h-px w-4 bg-stone-300" />}
+        </span>
+      ))}
+    </div>
   );
 }
