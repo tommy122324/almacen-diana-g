@@ -10,17 +10,12 @@ import { exportarPedidosPDF } from "@/lib/export";
 import { MoneyInput } from "@/components/MoneyInput";
 import { Card, Boton, StatCard, Input, Field, Chip, Select, inputCls } from "@/components/ui";
 
-type Filtro = "todos" | "apartado" | "pedido";
-
 export default function Apartados() {
   const negocioId = useStore((s) => s.negocioActivoId);
   const negocios = useStore((s) => s.negocios);
   const apartados = useStore((s) => s.apartados);
   const agregar = useStore((s) => s.agregarApartado);
   const eliminar = useStore((s) => s.eliminarApartado);
-
-  const [verPendientes, setVerPendientes] = useState(true);
-  const [verCompletados, setVerCompletados] = useState(false);
 
   const [tipo, setTipo] = useState<TipoApartado>("apartado");
   const [descripcion, setDescripcion] = useState("");
@@ -30,34 +25,36 @@ export default function Apartados() {
   const [valorTotal, setValorTotal] = useState(0);
   const [abonoInicial, setAbonoInicial] = useState(0);
   const [metodoInicial, setMetodoInicial] = useState<MetodoPago>("efectivo");
-  const [filtro, setFiltro] = useState<Filtro>("todos");
 
   const esPedido = tipo === "pedido";
 
-  async function borrarApartado(id: string) {
-    if (await confirmarEliminar("Se eliminará el registro y todos sus abonos.")) {
-      eliminar(id);
-      avisar("Eliminado");
+  async function borrarApartado(a: Apartado) {
+    const que = a.tipo === "pedido" ? "el PEDIDO" : "el APARTADO";
+    if (await confirmarEliminar(`Se eliminará ${que} de "${a.cliente}" y sus abonos. Esto no afecta a los demás registros.`)) {
+      eliminar(a.id);
+      avisar(a.tipo === "pedido" ? "Pedido eliminado" : "Apartado eliminado");
     }
   }
 
-  const { pendientes, completados, totValor, totAbonado, totSaldo } = useMemo(() => {
+  const g = useMemo(() => {
     const propios = apartados
       .filter((a) => a.negocioId === negocioId)
-      .filter((a) => filtro === "todos" || a.tipo === filtro)
       .sort((a, b) => b.fecha.localeCompare(a.fecha));
     // Un pedido se "completa" cuando se entrega; un apartado cuando se paga.
     const estaCompleto = (a: Apartado) => (a.tipo === "pedido" ? a.entregado : a.estado === "completado");
-    const pendientes = propios.filter((a) => !estaCompleto(a));
-    const completados = propios.filter((a) => estaCompleto(a));
+    const apart = propios.filter((a) => a.tipo === "apartado");
+    const ped = propios.filter((a) => a.tipo === "pedido");
+    const apartPend = apart.filter((a) => !estaCompleto(a));
     return {
-      pendientes,
-      completados,
-      totValor: pendientes.reduce((s, a) => s + a.valorTotal, 0),
-      totAbonado: pendientes.reduce((s, a) => s + abonadoDe(a), 0),
-      totSaldo: pendientes.reduce((s, a) => s + saldoDe(a), 0),
+      apartPend,
+      apartComp: apart.filter((a) => estaCompleto(a)),
+      pedPend: ped.filter((a) => !estaCompleto(a)),
+      pedComp: ped.filter((a) => estaCompleto(a)),
+      totValor: apartPend.reduce((s, a) => s + a.valorTotal, 0),
+      totAbonado: apartPend.reduce((s, a) => s + abonadoDe(a), 0),
+      totSaldo: apartPend.reduce((s, a) => s + saldoDe(a), 0),
     };
-  }, [apartados, negocioId, filtro]);
+  }, [apartados, negocioId]);
 
   const diferenciaPreview = Math.max(0, valorTotal - abonoInicial);
   const negocio = negocios.find((n) => n.id === negocioId)?.nombre ?? "Almacén Diana G";
@@ -84,9 +81,9 @@ export default function Apartados() {
       <h1 className="text-2xl font-bold text-stone-800">Apartados y pedidos</h1>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <StatCard label="Valor (pendientes)" value={totValor} tone="default" />
-        <StatCard label="Abonado" value={totAbonado} tone="green" />
-        <StatCard label="Por cobrar (saldo)" value={totSaldo} tone="red" />
+        <StatCard label="Valor apartados" value={g.totValor} tone="default" hint="Pendientes" />
+        <StatCard label="Abonado" value={g.totAbonado} tone="green" />
+        <StatCard label="Por cobrar (saldo)" value={g.totSaldo} tone="red" />
       </div>
 
       {/* Formulario */}
@@ -159,66 +156,71 @@ export default function Apartados() {
         </div>
       </Card>
 
-      {/* Filtro + PDF de pedidos */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-1 gap-1 rounded-xl border border-stone-200 bg-white p-1">
-          {(["todos", "apartado", "pedido"] as Filtro[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFiltro(f)}
-              className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${filtro === f ? "bg-amber-500 text-white" : "text-stone-500 hover:bg-stone-100"}`}
-            >
-              {f === "apartado" ? "Apartados" : f === "pedido" ? "Pedidos" : "Todos"}
-            </button>
-          ))}
+      {/* ── SECCIÓN APARTADOS (ámbar) ── */}
+      <section className="rounded-2xl border-2 border-amber-200 bg-amber-50/50 p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Package className="h-5 w-5 text-amber-600" />
+          <h2 className="text-lg font-bold text-amber-800">Apartados</h2>
+          <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-800">{g.apartPend.length} pendientes</span>
         </div>
-        {pedidosNegocio.length > 0 && (
-          <Boton variant="outline" onClick={() => exportarPedidosPDF(negocio, pedidosNegocio)}>
-            <FileText className="h-4 w-4" /> PDF de pedidos
-          </Boton>
-        )}
-      </div>
+        <div className="space-y-3">
+          <ListaPlegable titulo="Pendientes" items={g.apartPend} abiertoInicial onEliminar={borrarApartado} />
+          {g.apartComp.length > 0 && <ListaPlegable titulo="Completados" items={g.apartComp} abiertoInicial={false} onEliminar={borrarApartado} />}
+        </div>
+      </section>
 
-      {/* Pendientes (plegable) */}
-      <div>
-        <button
-          onClick={() => setVerPendientes((v) => !v)}
-          className="mb-2 flex w-full items-center gap-2 font-semibold text-stone-800"
-        >
-          {verPendientes ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          Pendientes ({pendientes.length})
-        </button>
-        {verPendientes &&
-          (pendientes.length === 0 ? (
-            <Card><p className="text-sm text-stone-400">No hay registros pendientes. 🎉</p></Card>
-          ) : (
-            <div className="space-y-3">
-              {pendientes.map((a) => (
-                <ApartadoCard key={a.id} apartado={a} onEliminar={() => borrarApartado(a.id)} />
-              ))}
-            </div>
-          ))}
-      </div>
-
-      {/* Completados (plegable) */}
-      {completados.length > 0 && (
-        <div>
-          <button
-            onClick={() => setVerCompletados((v) => !v)}
-            className="mb-2 flex w-full items-center gap-2 font-semibold text-stone-800"
-          >
-            {verCompletados ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            Completados ({completados.length})
-          </button>
-          {verCompletados && (
-            <div className="space-y-3">
-              {completados.map((a) => (
-                <ApartadoCard key={a.id} apartado={a} onEliminar={() => borrarApartado(a.id)} />
-              ))}
-            </div>
+      {/* ── SECCIÓN PEDIDOS (azul) ── */}
+      <section className="rounded-2xl border-2 border-sky-200 bg-sky-50/50 p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <ClipboardList className="h-5 w-5 text-sky-600" />
+            <h2 className="text-lg font-bold text-sky-800">Pedidos</h2>
+            <span className="rounded-full bg-sky-200 px-2 py-0.5 text-xs font-semibold text-sky-800">{g.pedPend.length} pendientes</span>
+          </div>
+          {pedidosNegocio.length > 0 && (
+            <Boton variant="outline" onClick={() => exportarPedidosPDF(negocio, pedidosNegocio)}>
+              <FileText className="h-4 w-4" /> PDF de pedidos
+            </Boton>
           )}
         </div>
-      )}
+        <div className="space-y-3">
+          <ListaPlegable titulo="Pendientes" items={g.pedPend} abiertoInicial onEliminar={borrarApartado} />
+          {g.pedComp.length > 0 && <ListaPlegable titulo="Entregados" items={g.pedComp} abiertoInicial={false} onEliminar={borrarApartado} />}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** Lista plegable de tarjetas (con su propio estado de abierto/cerrado). */
+function ListaPlegable({
+  titulo,
+  items,
+  abiertoInicial,
+  onEliminar,
+}: {
+  titulo: string;
+  items: Apartado[];
+  abiertoInicial: boolean;
+  onEliminar: (a: Apartado) => void;
+}) {
+  const [abierto, setAbierto] = useState(abiertoInicial);
+  return (
+    <div>
+      <button onClick={() => setAbierto((v) => !v)} className="mb-2 flex w-full items-center gap-2 text-sm font-semibold text-stone-700">
+        {abierto ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        {titulo} ({items.length})
+      </button>
+      {abierto &&
+        (items.length === 0 ? (
+          <p className="px-1 pb-1 text-sm text-stone-400">Nada por aquí. 🎉</p>
+        ) : (
+          <div className="space-y-3">
+            {items.map((a) => (
+              <ApartadoCard key={a.id} apartado={a} onEliminar={() => onEliminar(a)} />
+            ))}
+          </div>
+        ))}
     </div>
   );
 }

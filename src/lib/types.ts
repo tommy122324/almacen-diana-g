@@ -6,7 +6,6 @@ export type MetodoPago =
   | "nequi"
   | "daviplata"
   | "tarjeta"
-  | "credito"
   | "sistecredito"
   | "addi";
 
@@ -15,7 +14,6 @@ export const METODOS: MetodoPago[] = [
   "nequi",
   "daviplata",
   "tarjeta",
-  "credito",
   "sistecredito",
   "addi",
 ];
@@ -25,7 +23,6 @@ export const METODO_LABEL: Record<MetodoPago, string> = {
   nequi: "Nequi",
   daviplata: "DaviPlata",
   tarjeta: "Tarjeta",
-  credito: "Tarjeta de crédito",
   sistecredito: "Sistecrédito",
   addi: "Addi",
 };
