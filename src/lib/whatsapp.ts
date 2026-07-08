@@ -19,5 +19,5 @@ export function abrirWhatsApp(tel: string, mensaje: string) {
 /** Mensaje cuando un pedido llegó a la tienda. */
 export function mensajePedidoLlego(descripcion: string): string {
   const prod = descripcion.trim() || "tu pedido";
-  return `Hola, te escribimos de Almacén Diana 🐝. Encargaste: ${prod}. ¡Te confirmamos que ya llegó a la tienda! Te esperamos con mucha emoción. 💛`;
+  return `Hola, te escribimos de Almacén Diana. Encargaste: ${prod}. ¡Te confirmamos que ya llegó a la tienda! Te esperamos con mucha emoción.`;
 }
