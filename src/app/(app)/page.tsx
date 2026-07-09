@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { Package, ClipboardList, Target, TrendingUp, Sparkles, ArrowRight, FileText } from "lucide-react";
 import { useStore, saldoDe } from "@/lib/store";
@@ -46,6 +46,7 @@ export default function Panel() {
   const [metaTmp, setMetaTmp] = useState(0);
 
   const negocioId = useStore((s) => s.negocioActivoId);
+  const cargandoRango = useStore((s) => s.cargandoRango);
   const ventas = useStore((s) => s.ventas);
   const gastos = useStore((s) => s.gastos);
   const entradas = useStore((s) => s.entradas);
@@ -59,6 +60,13 @@ export default function Panel() {
     [tipo, rangoDesde, rangoHasta],
   );
   const periodoPrev = useMemo(() => periodoAnterior(tipo), [tipo]);
+
+  // Cargar (si falta) el rango que se está viendo, incluido el periodo anterior para el comparativo.
+  const asegurarRango = useStore((s) => s.asegurarRango);
+  useEffect(() => {
+    const desde = periodoPrev.desde < periodo.desde ? periodoPrev.desde : periodo.desde;
+    asegurarRango(desde, periodo.hasta);
+  }, [periodo.desde, periodo.hasta, periodoPrev.desde, asegurarRango]);
 
   const datos = useMemo(() => {
     const v = filtrar(ventas, negocioId, periodo);
@@ -159,6 +167,8 @@ export default function Panel() {
           <span className="rounded-xl bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-800">Hoy</span>
         )}
       </div>
+
+      {cargandoRango && <p className="text-xs text-stone-400">Cargando historial…</p>}
 
       {/* Rango de fechas personalizado */}
       {tipo === "rango" && (
@@ -322,6 +332,7 @@ function ComparativoCard() {
   });
 
   const negocio = useStore((s) => s.negocios.find((n) => n.id === s.negocioActivoId)?.nombre ?? "Almacén Diana G");
+  const asegurarRango = useStore((s) => s.asegurarRango);
 
   const { datos, pa, pb, rA, rB } = useMemo(() => {
     const pa: Periodo = periodoDe(tipo, parseFecha(refA));
@@ -341,6 +352,13 @@ function ComparativoCard() {
     ];
     return { datos, pa, pb, rA, rB };
   }, [tipo, refA, refB, ventas, gastos, entradas, apartados, negocioId]);
+
+  // Traer los datos de ambos periodos si aún no están cargados
+  useEffect(() => {
+    const desde = pa.desde < pb.desde ? pa.desde : pb.desde;
+    const hasta = pa.hasta > pb.hasta ? pa.hasta : pb.hasta;
+    asegurarRango(desde, hasta);
+  }, [pa.desde, pa.hasta, pb.desde, pb.hasta, asegurarRango]);
 
   const labelA = `${formatFechaCorta(pa.desde)} a ${formatFechaCorta(pa.hasta)}`;
   const labelB = `${formatFechaCorta(pb.desde)} a ${formatFechaCorta(pb.hasta)}`;

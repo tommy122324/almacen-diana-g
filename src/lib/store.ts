@@ -17,7 +17,7 @@ import type {
   MetodoPago,
   TipoApartado,
 } from "./types";
-import type { TipoPeriodo } from "./calc";
+import { periodoDe, type TipoPeriodo } from "./calc";
 
 /** Suma de abonos de un apartado. */
 export function abonadoDe(a: Apartado): number {
@@ -69,6 +69,12 @@ interface State {
   revision: number;
   refrescarRemoto: () => Promise<void>;
 
+  // Ventana de fechas cargada para ventas/gastos/entradas (para no traer TODO).
+  movDesde: string;
+  movHasta: string;
+  cargandoRango: boolean;
+  asegurarRango: (desde: string, hasta: string) => Promise<void>;
+
   cargarDesdeSupabase: () => Promise<void>;
   limpiar: () => void;
 
@@ -108,6 +114,9 @@ interface State {
   setCuadre: (fecha: string, patch: { efectivoReal?: number; cuadrado?: boolean | null; diferencia?: number }) => Promise<void>;
 }
 
+// Cola para que las peticiones de rango no compitan entre sí (Panel, comparativo, etc.).
+let colaRango: Promise<void> = Promise.resolve();
+
 async function conError(fn: () => Promise<void>) {
   try {
     await fn();
@@ -132,15 +141,41 @@ export const useStore = create<State>()((set, get) => ({
   miRol: "",
   esAdmin: false,
   revision: 0,
+  movDesde: periodoDe("mes").desde,
+  movHasta: periodoDe("mes").hasta,
+  cargandoRango: false,
   refrescarRemoto: async () => {
-    const negocioId = get().negocioActivoId;
-    if (!negocioId) return;
+    const { negocioActivoId, movDesde, movHasta } = get();
+    if (!negocioActivoId) return;
     try {
-      const [datos, config] = await Promise.all([db.cargarTodo(negocioId), db.cargarConfig(negocioId)]);
-      set((s) => ({ ...datos, config, revision: s.revision + 1 }));
+      const [base, mov, config] = await Promise.all([
+        db.cargarBase(negocioActivoId),
+        db.cargarMovimientos(negocioActivoId, movDesde, movHasta),
+        db.cargarConfig(negocioActivoId),
+      ]);
+      set((s) => ({ ...base, ...mov, config, revision: s.revision + 1 }));
     } catch (e) {
       console.error(e);
     }
+  },
+  asegurarRango: (desde, hasta) => {
+    // Encolar: cada petición se ejecuta después de la anterior, viendo la ventana ya ampliada.
+    colaRango = colaRango.then(async () => {
+      const { negocioActivoId, movDesde, movHasta } = get();
+      if (!negocioActivoId || !desde || !hasta) return;
+      if (desde >= movDesde && hasta <= movHasta) return; // ya cargado
+      const nd = desde < movDesde ? desde : movDesde;
+      const nh = hasta > movHasta ? hasta : movHasta;
+      set({ cargandoRango: true });
+      try {
+        const mov = await db.cargarMovimientos(negocioActivoId, nd, nh);
+        set({ ...mov, movDesde: nd, movHasta: nh, cargandoRango: false });
+      } catch (e) {
+        console.error(e);
+        set({ cargandoRango: false });
+      }
+    });
+    return colaRango;
   },
   setConfig: (patch) =>
     conError(async () => {
@@ -170,8 +205,14 @@ export const useStore = create<State>()((set, get) => ({
       }
       const prev = get().negocioActivoId;
       const activo = prev && negocios.some((x) => x.id === prev) ? prev : negocios[0].id;
-      const [datos, config, rol] = await Promise.all([db.cargarTodo(activo), db.cargarConfig(activo), db.miRol(activo)]);
-      set({ negocios, negocioActivoId: activo, ...datos, config, miRol: rol, esAdmin: rol === "dueño" || rol === "admin", cargando: false, cargado: true });
+      const p = periodoDe("mes"); // arranca con el mes actual
+      const [base, mov, config, rol] = await Promise.all([
+        db.cargarBase(activo),
+        db.cargarMovimientos(activo, p.desde, p.hasta),
+        db.cargarConfig(activo),
+        db.miRol(activo),
+      ]);
+      set({ negocios, negocioActivoId: activo, ...base, ...mov, movDesde: p.desde, movHasta: p.hasta, config, miRol: rol, esAdmin: rol === "dueño" || rol === "admin", cargando: false, cargado: true });
     } catch (e) {
       console.error(e);
       avisarError("No se pudieron cargar los datos");
@@ -180,7 +221,7 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   limpiar: () =>
-    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [], config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 }, miRol: "", esAdmin: false }),
+    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [], config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 }, miRol: "", esAdmin: false, movDesde: periodoDe("mes").desde, movHasta: periodoDe("mes").hasta }),
 
   crearNegocio: async (nombre) => {
     try {
@@ -197,8 +238,14 @@ export const useStore = create<State>()((set, get) => ({
   setNegocioActivo: async (id) => {
     set({ negocioActivoId: id, cargando: true });
     try {
-      const [datos, config, rol] = await Promise.all([db.cargarTodo(id), db.cargarConfig(id), db.miRol(id)]);
-      set({ ...datos, config, miRol: rol, esAdmin: rol === "dueño" || rol === "admin", cargando: false });
+      const p = periodoDe("mes");
+      const [base, mov, config, rol] = await Promise.all([
+        db.cargarBase(id),
+        db.cargarMovimientos(id, p.desde, p.hasta),
+        db.cargarConfig(id),
+        db.miRol(id),
+      ]);
+      set({ ...base, ...mov, movDesde: p.desde, movHasta: p.hasta, config, miRol: rol, esAdmin: rol === "dueño" || rol === "admin", cargando: false });
     } catch (e) {
       console.error(e);
       set({ cargando: false });

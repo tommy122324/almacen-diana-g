@@ -143,36 +143,48 @@ export async function crearNegocioDB(nombre: string): Promise<Negocio> {
   return mNegocio(data);
 }
 
-// ---------- Carga completa de un negocio ----------
-export interface DatosNegocio {
-  ventas: Venta[];
-  gastos: Gasto[];
-  entradas: Entrada[];
+// ---------- Carga de un negocio (por ventana de fechas) ----------
+// "Base": datos de bajo volumen y siempre necesarios (apartados activos, metas, cuadres).
+// "Movimientos": ventas/gastos/entradas, que crecen a diario → se cargan por rango de fechas.
+export interface Base {
   apartados: Apartado[];
   metas: Meta[];
   cuadres: Cuadre[];
 }
+export interface Movimientos {
+  ventas: Venta[];
+  gastos: Gasto[];
+  entradas: Entrada[];
+}
 
-export async function cargarTodo(negocioId: string): Promise<DatosNegocio> {
+export async function cargarBase(negocioId: string): Promise<Base> {
   const c = db();
-  const [ventas, gastos, entradas, apartados, metas, cuadres] = await Promise.all([
-    c.from("ventas").select("*").eq("negocio_id", negocioId),
-    c.from("gastos").select("*").eq("negocio_id", negocioId),
-    c.from("entradas").select("*").eq("negocio_id", negocioId),
+  const [apartados, metas, cuadres] = await Promise.all([
     c.from("apartados").select("*, abonos(*)").eq("negocio_id", negocioId),
     c.from("metas").select("*").eq("negocio_id", negocioId),
     c.from("cuadres").select("*").eq("negocio_id", negocioId),
   ]);
-  for (const r of [ventas, gastos, entradas, apartados, metas, cuadres]) {
+  for (const r of [apartados, metas, cuadres]) {
+    if (r.error) throw r.error;
+  }
+  return {
+    apartados: (apartados.data ?? []).map(mApartado),
+    metas: (metas.data ?? []).map(mMeta),
+    cuadres: (cuadres.data ?? []).map(mCuadre),
+  };
+}
+
+export async function cargarMovimientos(negocioId: string, desde: string, hasta: string): Promise<Movimientos> {
+  const c = db();
+  const rango = (t: string) => c.from(t).select("*").eq("negocio_id", negocioId).gte("fecha", desde).lte("fecha", hasta);
+  const [ventas, gastos, entradas] = await Promise.all([rango("ventas"), rango("gastos"), rango("entradas")]);
+  for (const r of [ventas, gastos, entradas]) {
     if (r.error) throw r.error;
   }
   return {
     ventas: (ventas.data ?? []).map(mVenta),
     gastos: (gastos.data ?? []).map(mGasto),
     entradas: (entradas.data ?? []).map(mEntrada),
-    apartados: (apartados.data ?? []).map(mApartado),
-    metas: (metas.data ?? []).map(mMeta),
-    cuadres: (cuadres.data ?? []).map(mCuadre),
   };
 }
 

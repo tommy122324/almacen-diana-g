@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { FileSpreadsheet, FileText, Check } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { METODOS, METODO_LABEL, type MetodoPago } from "@/lib/types";
@@ -26,6 +26,13 @@ export default function Reportes() {
   const [incluirAbonos, setIncluirAbonos] = useState(true);
 
   const negocio = negocios.find((n) => n.id === negocioId)?.nombre ?? "Almacén Diana G";
+  const asegurarRango = useStore((s) => s.asegurarRango);
+  const cargandoRango = useStore((s) => s.cargandoRango);
+
+  // Cargar el periodo del reporte si aún no está en memoria
+  useEffect(() => {
+    asegurarRango(periodo.desde, periodo.hasta);
+  }, [periodo.desde, periodo.hasta, asegurarRango]);
 
   const datos = useMemo(() => {
     const v = filtrar(ventas, negocioId, periodo).filter((x) => metodosSel.has(x.metodo));
@@ -101,6 +108,7 @@ export default function Reportes() {
         </div>
         <p className="mt-2 text-xs text-stone-500">
           {etiqueta} · {formatFechaCorta(periodo.desde)} a {formatFechaCorta(periodo.hasta)}
+          {cargandoRango && <span className="ml-2 text-stone-400">· Cargando…</span>}
         </p>
       </Card>
 

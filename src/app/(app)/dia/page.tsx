@@ -33,6 +33,12 @@ export default function RegistroDia() {
   const editarEntrada = useStore((s) => s.editarEntrada);
   const eliminarEntrada = useStore((s) => s.eliminarEntrada);
   const setCuadre = useStore((s) => s.setCuadre);
+  const asegurarRango = useStore((s) => s.asegurarRango);
+
+  // Cargar el día seleccionado si aún no está en memoria (el admin puede ir a fechas viejas)
+  useEffect(() => {
+    asegurarRango(fecha, fecha);
+  }, [fecha, asegurarRango]);
 
   // Datos del día seleccionado
   const dia = useMemo(() => {
