@@ -84,6 +84,34 @@ export async function cargarNegocios(): Promise<Negocio[]> {
   return (data ?? []).map(mNegocio);
 }
 
+export interface Miembro {
+  usuarioId: string;
+  rol: string;
+  email: string;
+  nombre: string;
+}
+
+/** Lista de miembros de un negocio (para el panel de admin). */
+export async function cargarMiembros(negocioId: string): Promise<Miembro[]> {
+  const { data, error } = await db()
+    .from("miembros")
+    .select("usuario_id, rol, email, nombre, creado_en")
+    .eq("negocio_id", negocioId)
+    .order("creado_en");
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ usuarioId: s(r.usuario_id), rol: s(r.rol), email: s(r.email), nombre: s(r.nombre) }));
+}
+
+/** Rol del usuario actual en un negocio: "dueño" | "admin" | "empleado" | "". */
+export async function miRol(negocioId: string): Promise<string> {
+  const c = db();
+  const { data: userData } = await c.auth.getUser();
+  const uid = userData.user?.id;
+  if (!uid) return "";
+  const { data } = await c.from("miembros").select("rol").eq("negocio_id", negocioId).eq("usuario_id", uid).maybeSingle();
+  return (data?.rol as string) ?? "";
+}
+
 export async function crearNegocioDB(nombre: string): Promise<Negocio> {
   const c = db();
   const { data: userData } = await c.auth.getUser();

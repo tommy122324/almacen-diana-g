@@ -3,20 +3,23 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
 import { LayoutDashboard, NotebookPen, Package, FileBarChart, Settings } from "lucide-react";
+import { useStore } from "@/lib/store";
 
 const items = [
-  { href: "/", label: "Panel", corto: "Panel", icon: LayoutDashboard },
-  { href: "/dia", label: "Registro del día", corto: "Registro", icon: NotebookPen },
-  { href: "/apartados", label: "Apartados", corto: "Apartados", icon: Package },
-  { href: "/reportes", label: "Reportes", corto: "Reportes", icon: FileBarChart },
-  { href: "/ajustes", label: "Ajustes", corto: "Ajustes", icon: Settings },
+  { href: "/", label: "Panel", corto: "Panel", icon: LayoutDashboard, soloAdmin: false },
+  { href: "/dia", label: "Registro del día", corto: "Registro", icon: NotebookPen, soloAdmin: false },
+  { href: "/apartados", label: "Apartados", corto: "Apartados", icon: Package, soloAdmin: false },
+  { href: "/reportes", label: "Reportes", corto: "Reportes", icon: FileBarChart, soloAdmin: true },
+  { href: "/ajustes", label: "Ajustes", corto: "Ajustes", icon: Settings, soloAdmin: true },
 ];
 
 export function Nav() {
   const path = usePathname();
+  const esAdmin = useStore((s) => s.esAdmin);
+  const visibles = items.filter((i) => !i.soloAdmin || esAdmin);
   return (
     <nav className="flex gap-1 md:flex-col">
-      {items.map(({ href, label, corto, icon: Icon }) => {
+      {visibles.map(({ href, label, corto, icon: Icon }) => {
         const activo = path === href;
         return (
           <Link

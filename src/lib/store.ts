@@ -54,6 +54,10 @@ interface State {
   config: Configuracion;
   setConfig: (patch: Partial<Configuracion>) => Promise<void>;
 
+  // Rol del usuario actual en el negocio activo
+  miRol: string; // "dueño" | "admin" | "empleado" | ""
+  esAdmin: boolean;
+
   // Preferencia del panel (persiste al cambiar de pestaña)
   panelTipo: TipoPeriodo;
   panelDesde: string;
@@ -120,6 +124,8 @@ export const useStore = create<State>()((set, get) => ({
   metas: [],
   cuadres: [],
   config: { whatsapp: "", correoCodigos: "" },
+  miRol: "",
+  esAdmin: false,
   setConfig: (patch) =>
     conError(async () => {
       const negocioId = get().negocioActivoId;
@@ -148,8 +154,8 @@ export const useStore = create<State>()((set, get) => ({
       }
       const prev = get().negocioActivoId;
       const activo = prev && negocios.some((x) => x.id === prev) ? prev : negocios[0].id;
-      const [datos, config] = await Promise.all([db.cargarTodo(activo), db.cargarConfig(activo)]);
-      set({ negocios, negocioActivoId: activo, ...datos, config, cargando: false, cargado: true });
+      const [datos, config, rol] = await Promise.all([db.cargarTodo(activo), db.cargarConfig(activo), db.miRol(activo)]);
+      set({ negocios, negocioActivoId: activo, ...datos, config, miRol: rol, esAdmin: rol === "dueño" || rol === "admin", cargando: false, cargado: true });
     } catch (e) {
       console.error(e);
       avisarError("No se pudieron cargar los datos");
@@ -158,7 +164,7 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   limpiar: () =>
-    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [], config: { whatsapp: "", correoCodigos: "" } }),
+    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [], config: { whatsapp: "", correoCodigos: "" }, miRol: "", esAdmin: false }),
 
   crearNegocio: async (nombre) => {
     try {
@@ -175,8 +181,8 @@ export const useStore = create<State>()((set, get) => ({
   setNegocioActivo: async (id) => {
     set({ negocioActivoId: id, cargando: true });
     try {
-      const [datos, config] = await Promise.all([db.cargarTodo(id), db.cargarConfig(id)]);
-      set({ ...datos, config, cargando: false });
+      const [datos, config, rol] = await Promise.all([db.cargarTodo(id), db.cargarConfig(id), db.miRol(id)]);
+      set({ ...datos, config, miRol: rol, esAdmin: rol === "dueño" || rol === "admin", cargando: false });
     } catch (e) {
       console.error(e);
       set({ cargando: false });
@@ -265,8 +271,8 @@ export const useStore = create<State>()((set, get) => ({
       if (!ap) return;
       const ab = await db.insertAbono({ apartadoId: id, fecha, monto, metodo });
       const abonos = [...ap.abonos, ab];
+      // El estado en la BD lo recalcula un trigger; aquí solo actualizamos la vista.
       const nuevoEstado = estadoDe(ap.valorTotal, abonos.reduce((t, x) => t + x.monto, 0));
-      if (nuevoEstado !== ap.estado) await db.updateApartado(id, { estado: nuevoEstado });
       set((s) => ({ apartados: s.apartados.map((a) => (a.id === id ? { ...a, abonos, estado: nuevoEstado } : a)) }));
     }),
   editarApartado: (id, datos) =>
@@ -297,8 +303,8 @@ export const useStore = create<State>()((set, get) => ({
       const ap = get().apartados.find((a) => a.id === apartadoId);
       if (!ap) return;
       const abonos = ap.abonos.filter((x) => x.id !== abonoId);
+      // El estado en la BD lo recalcula un trigger; aquí solo actualizamos la vista.
       const nuevoEstado = estadoDe(ap.valorTotal, abonos.reduce((t, x) => t + x.monto, 0));
-      if (nuevoEstado !== ap.estado) await db.updateApartado(apartadoId, { estado: nuevoEstado });
       set((s) => ({ apartados: s.apartados.map((a) => (a.id === apartadoId ? { ...a, abonos, estado: nuevoEstado } : a)) }));
     }),
   eliminarApartado: (id) =>

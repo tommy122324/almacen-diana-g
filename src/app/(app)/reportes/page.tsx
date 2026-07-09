@@ -10,6 +10,7 @@ import { Card, Boton, Input } from "@/components/ui";
 import { VentasBarChart } from "@/components/Charts";
 
 export default function Reportes() {
+  const esAdmin = useStore((s) => s.esAdmin);
   const negocioId = useStore((s) => s.negocioActivoId);
   const negocios = useStore((s) => s.negocios);
   const ventas = useStore((s) => s.ventas);
@@ -58,6 +59,14 @@ export default function Reportes() {
     gastos: datos.g,
     entradas: datos.e,
   };
+
+  if (!esAdmin) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 text-center text-stone-500">
+        Esta sección es solo para el administrador.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">

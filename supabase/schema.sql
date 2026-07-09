@@ -244,6 +244,99 @@ create policy config_write on public.configuracion for all
   using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
 
 -- ============================================================
+-- FASE 7a — Roles: admin = todo · empleado = solo HOY y solo agregar
+-- ============================================================
+
+-- Columnas para mostrar colaboradores en el panel de admin
+alter table public.miembros add column if not exists email text;
+alter table public.miembros add column if not exists nombre text;
+
+-- Fecha de hoy en Bogotá (para limitar al empleado al día actual)
+create or replace function public.hoy_bogota()
+returns date language sql stable set search_path = public as $$
+  select (now() at time zone 'America/Bogota')::date;
+$$;
+
+-- Trigger: recalcular estado del apartado cuando cambian sus abonos
+-- (así el empleado puede abonar sin necesidad de permiso para editar apartados)
+create or replace function public.recalcular_estado_apartado()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare ap_id uuid; total bigint; vt bigint;
+begin
+  ap_id := coalesce(new.apartado_id, old.apartado_id);
+  select coalesce(sum(monto), 0) into total from public.abonos where apartado_id = ap_id;
+  select valor_total into vt from public.apartados where id = ap_id;
+  update public.apartados
+    set estado = case when vt > 0 and total >= vt then 'completado' else 'pendiente' end
+    where id = ap_id;
+  return null;
+end;
+$$;
+drop trigger if exists trg_recalc_estado on public.abonos;
+create trigger trg_recalc_estado
+  after insert or update or delete on public.abonos
+  for each row execute function public.recalcular_estado_apartado();
+
+-- VENTAS
+drop policy if exists ventas_all on public.ventas;
+drop policy if exists ventas_sel on public.ventas;
+drop policy if exists ventas_ins on public.ventas;
+drop policy if exists ventas_upd on public.ventas;
+drop policy if exists ventas_del on public.ventas;
+create policy ventas_sel on public.ventas for select using (public.es_admin(negocio_id) or (public.es_miembro(negocio_id) and fecha = public.hoy_bogota()));
+create policy ventas_ins on public.ventas for insert with check (public.es_admin(negocio_id) or (public.es_miembro(negocio_id) and fecha = public.hoy_bogota()));
+create policy ventas_upd on public.ventas for update using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
+create policy ventas_del on public.ventas for delete using (public.es_admin(negocio_id));
+
+-- GASTOS
+drop policy if exists gastos_all on public.gastos;
+drop policy if exists gastos_sel on public.gastos;
+drop policy if exists gastos_ins on public.gastos;
+drop policy if exists gastos_upd on public.gastos;
+drop policy if exists gastos_del on public.gastos;
+create policy gastos_sel on public.gastos for select using (public.es_admin(negocio_id) or (public.es_miembro(negocio_id) and fecha = public.hoy_bogota()));
+create policy gastos_ins on public.gastos for insert with check (public.es_admin(negocio_id) or (public.es_miembro(negocio_id) and fecha = public.hoy_bogota()));
+create policy gastos_upd on public.gastos for update using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
+create policy gastos_del on public.gastos for delete using (public.es_admin(negocio_id));
+
+-- ENTRADAS
+drop policy if exists entradas_all on public.entradas;
+drop policy if exists entradas_sel on public.entradas;
+drop policy if exists entradas_ins on public.entradas;
+drop policy if exists entradas_upd on public.entradas;
+drop policy if exists entradas_del on public.entradas;
+create policy entradas_sel on public.entradas for select using (public.es_admin(negocio_id) or (public.es_miembro(negocio_id) and fecha = public.hoy_bogota()));
+create policy entradas_ins on public.entradas for insert with check (public.es_admin(negocio_id) or (public.es_miembro(negocio_id) and fecha = public.hoy_bogota()));
+create policy entradas_upd on public.entradas for update using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
+create policy entradas_del on public.entradas for delete using (public.es_admin(negocio_id));
+
+-- APARTADOS
+drop policy if exists apartados_all on public.apartados;
+drop policy if exists apartados_sel on public.apartados;
+drop policy if exists apartados_ins on public.apartados;
+drop policy if exists apartados_upd on public.apartados;
+drop policy if exists apartados_del on public.apartados;
+create policy apartados_sel on public.apartados for select using (public.es_admin(negocio_id) or (public.es_miembro(negocio_id) and fecha = public.hoy_bogota()));
+create policy apartados_ins on public.apartados for insert with check (public.es_admin(negocio_id) or (public.es_miembro(negocio_id) and fecha = public.hoy_bogota()));
+create policy apartados_upd on public.apartados for update using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
+create policy apartados_del on public.apartados for delete using (public.es_admin(negocio_id));
+
+-- ABONOS: ver/insertar cualquier miembro (el apartado ya limita la visibilidad); borrar solo admin
+drop policy if exists abonos_all on public.abonos;
+drop policy if exists abonos_sel on public.abonos;
+drop policy if exists abonos_ins on public.abonos;
+drop policy if exists abonos_del on public.abonos;
+create policy abonos_sel on public.abonos for select using (public.es_miembro(public.negocio_de_apartado(apartado_id)));
+create policy abonos_ins on public.abonos for insert with check (public.es_miembro(public.negocio_de_apartado(apartado_id)));
+create policy abonos_del on public.abonos for delete using (public.es_admin(public.negocio_de_apartado(apartado_id)));
+
+-- CUADRES y METAS: solo admin
+drop policy if exists cuadres_all on public.cuadres;
+create policy cuadres_admin on public.cuadres for all using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
+drop policy if exists metas_all on public.metas;
+create policy metas_admin on public.metas for all using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
+
+-- ============================================================
 -- Permisos para el rol de la app (la seguridad real la pone RLS)
 -- ============================================================
 grant usage on schema public to anon, authenticated;

@@ -1,12 +1,14 @@
 "use client";
 import { useState } from "react";
-import { MessageCircle, Save, Check } from "lucide-react";
+import { MessageCircle, Save, Check, Lock } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { avisar } from "@/lib/alerta";
 import { telefonoWhatsApp } from "@/lib/whatsapp";
 import { Card, Boton, Input, Field } from "@/components/ui";
+import { GestionUsuarios } from "@/components/GestionUsuarios";
 
 export default function Ajustes() {
+  const esAdmin = useStore((s) => s.esAdmin);
   const config = useStore((s) => s.config);
   const setConfig = useStore((s) => s.setConfig);
 
@@ -22,12 +24,23 @@ export default function Ajustes() {
 
   const numeroFormateado = telefonoWhatsApp(whatsapp);
 
+  if (!esAdmin) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 text-center">
+        <Lock className="h-10 w-10 text-stone-300" />
+        <p className="text-stone-500">Esta sección es solo para el administrador.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-stone-800">Ajustes</h1>
         <p className="text-sm text-stone-500">Configuración de tu almacén</p>
       </div>
+
+      <GestionUsuarios />
 
       {/* WhatsApp del almacén */}
       <Card>

@@ -12,6 +12,7 @@ import { MoneyInput } from "@/components/MoneyInput";
 import { Card, Boton, StatCard, Input, Field, Chip, Select, inputCls } from "@/components/ui";
 
 export default function Apartados() {
+  const esAdmin = useStore((s) => s.esAdmin);
   const negocioId = useStore((s) => s.negocioActivoId);
   const negocios = useStore((s) => s.negocios);
   const apartados = useStore((s) => s.apartados);
@@ -165,8 +166,8 @@ export default function Apartados() {
           <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-800">{g.apartPend.length} pendientes</span>
         </div>
         <div className="space-y-3">
-          <ListaPlegable titulo="Pendientes" items={g.apartPend} abiertoInicial onEliminar={borrarApartado} />
-          {g.apartComp.length > 0 && <ListaPlegable titulo="Completados" items={g.apartComp} abiertoInicial={false} onEliminar={borrarApartado} />}
+          <ListaPlegable titulo="Pendientes" items={g.apartPend} abiertoInicial onEliminar={borrarApartado} puedeAdmin={esAdmin} />
+          {g.apartComp.length > 0 && <ListaPlegable titulo="Completados" items={g.apartComp} abiertoInicial={false} onEliminar={borrarApartado} puedeAdmin={esAdmin} />}
         </div>
       </section>
 
@@ -178,15 +179,15 @@ export default function Apartados() {
             <h2 className="text-lg font-bold text-sky-800">Pedidos</h2>
             <span className="rounded-full bg-sky-200 px-2 py-0.5 text-xs font-semibold text-sky-800">{g.pedPend.length} pendientes</span>
           </div>
-          {pedidosNegocio.length > 0 && (
+          {esAdmin && pedidosNegocio.length > 0 && (
             <Boton variant="outline" onClick={() => exportarPedidosPDF(negocio, pedidosNegocio)}>
               <FileText className="h-4 w-4" /> PDF de pedidos
             </Boton>
           )}
         </div>
         <div className="space-y-3">
-          <ListaPlegable titulo="Pendientes" items={g.pedPend} abiertoInicial onEliminar={borrarApartado} />
-          {g.pedComp.length > 0 && <ListaPlegable titulo="Entregados" items={g.pedComp} abiertoInicial={false} onEliminar={borrarApartado} />}
+          <ListaPlegable titulo="Pendientes" items={g.pedPend} abiertoInicial onEliminar={borrarApartado} puedeAdmin={esAdmin} />
+          {g.pedComp.length > 0 && <ListaPlegable titulo="Entregados" items={g.pedComp} abiertoInicial={false} onEliminar={borrarApartado} puedeAdmin={esAdmin} />}
         </div>
       </section>
     </div>
@@ -199,11 +200,13 @@ function ListaPlegable({
   items,
   abiertoInicial,
   onEliminar,
+  puedeAdmin,
 }: {
   titulo: string;
   items: Apartado[];
   abiertoInicial: boolean;
   onEliminar: (a: Apartado) => void;
+  puedeAdmin: boolean;
 }) {
   const [abierto, setAbierto] = useState(abiertoInicial);
   return (
@@ -218,7 +221,7 @@ function ListaPlegable({
         ) : (
           <div className="space-y-3">
             {items.map((a) => (
-              <ApartadoCard key={a.id} apartado={a} onEliminar={() => onEliminar(a)} />
+              <ApartadoCard key={a.id} apartado={a} onEliminar={() => onEliminar(a)} puedeAdmin={puedeAdmin} />
             ))}
           </div>
         ))}
@@ -226,7 +229,7 @@ function ListaPlegable({
   );
 }
 
-function ApartadoCard({ apartado, onEliminar }: { apartado: Apartado; onEliminar: () => void }) {
+function ApartadoCard({ apartado, onEliminar, puedeAdmin }: { apartado: Apartado; onEliminar: () => void; puedeAdmin: boolean }) {
   const abonar = useStore((s) => s.abonarApartado);
   const editar = useStore((s) => s.editarApartado);
   const eliminarAbono = useStore((s) => s.eliminarAbono);
@@ -336,14 +339,16 @@ function ApartadoCard({ apartado, onEliminar }: { apartado: Apartado; onEliminar
             <span>{formatFechaCorta(apartado.fecha)}</span>
           </div>
         </div>
-        <div className="flex gap-1">
-          <button onClick={() => setEditando(true)} className="text-stone-300 hover:text-amber-600">
-            <Pencil className="h-4 w-4" />
-          </button>
-          <button onClick={onEliminar} className="text-stone-300 hover:text-rose-500">
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
+        {puedeAdmin && (
+          <div className="flex gap-1">
+            <button onClick={() => setEditando(true)} className="text-stone-300 hover:text-amber-600">
+              <Pencil className="h-4 w-4" />
+            </button>
+            <button onClick={onEliminar} className="text-stone-300 hover:text-rose-500">
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Flujo del pedido: por conseguir → conseguido → entregado */}
@@ -352,7 +357,7 @@ function ApartadoCard({ apartado, onEliminar }: { apartado: Apartado; onEliminar
           <PasosPedido conseguido={apartado.conseguido} entregado={apartado.entregado} />
         </div>
       )}
-      {esPedido && (
+      {esPedido && puedeAdmin && (
         <div className="mt-2 flex flex-wrap gap-2">
           {!apartado.conseguido && (
             <Boton onClick={() => { marcarConseguido(apartado.id, true); avisar("¡Pedido conseguido! 🎉"); }}>
@@ -444,9 +449,11 @@ function ApartadoCard({ apartado, onEliminar }: { apartado: Apartado; onEliminar
                   <span className="text-stone-400">{formatFechaCorta(ab.fecha)}</span>
                   <span className="text-stone-500">{METODO_LABEL[ab.metodo ?? "efectivo"]}</span>
                   <span className="flex-1 text-right font-medium tabular-nums text-emerald-600">{formatCOP(ab.monto)}</span>
-                  <button onClick={() => borrarAbono(ab.id)} className="text-stone-300 hover:text-rose-500">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  {puedeAdmin && (
+                    <button onClick={() => borrarAbono(ab.id)} className="text-stone-300 hover:text-rose-500">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

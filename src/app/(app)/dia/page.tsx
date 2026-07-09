@@ -15,6 +15,7 @@ export default function RegistroDia() {
   const [verGrafico, setVerGrafico] = useState(false);
   const [calculando, setCalculando] = useState(false);
 
+  const esAdmin = useStore((s) => s.esAdmin);
   const negocioId = useStore((s) => s.negocioActivoId);
   const ventas = useStore((s) => s.ventas);
   const gastos = useStore((s) => s.gastos);
@@ -106,7 +107,11 @@ export default function RegistroDia() {
           <h1 className="text-2xl font-bold text-stone-800">Registro del día</h1>
           <p className="text-sm capitalize text-stone-500">{formatFechaLarga(fecha)}</p>
         </div>
-        <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-auto" />
+        {esAdmin ? (
+          <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-auto" />
+        ) : (
+          <span className="rounded-xl bg-stone-100 px-3 py-2 text-sm font-medium text-stone-600">Hoy</span>
+        )}
       </div>
 
       {/* Resumen del día */}
@@ -129,6 +134,7 @@ export default function RegistroDia() {
               key={v.id}
               metodo={v.metodo}
               monto={v.monto}
+              puedeEditar={esAdmin}
               onEdit={(m, monto) => { editarVenta(v.id, m, monto); avisar(); }}
               onDelete={() => borrar(() => eliminarVenta(v.id))}
             />
@@ -147,6 +153,7 @@ export default function RegistroDia() {
               key={g.id}
               concepto={g.concepto}
               monto={g.monto}
+              puedeEditar={esAdmin}
               onEdit={(c, m) => { editarGasto(g.id, c, m); avisar(); }}
               onDelete={() => borrar(() => eliminarGasto(g.id))}
             />
@@ -165,6 +172,7 @@ export default function RegistroDia() {
               key={e.id}
               concepto={e.concepto}
               monto={e.monto}
+              puedeEditar={esAdmin}
               onEdit={(c, m) => { editarEntrada(e.id, c, m); avisar(); }}
               onDelete={() => borrar(() => eliminarEntrada(e.id))}
             />
@@ -172,7 +180,8 @@ export default function RegistroDia() {
         </div>
       </Card>
 
-      {/* Cuadre de caja */}
+      {/* Cuadre de caja (solo admin) */}
+      {esAdmin && (
       <Card>
         <div className="mb-1 flex items-center justify-between">
           <h2 className="font-semibold text-stone-800">Cuadre de caja</h2>
@@ -290,6 +299,7 @@ export default function RegistroDia() {
           </div>
         </div>
       </Card>
+      )}
     </div>
   );
 }
@@ -311,11 +321,13 @@ function Vacio({ texto }: { texto: string }) {
 function FilaVenta({
   metodo,
   monto,
+  puedeEditar,
   onEdit,
   onDelete,
 }: {
   metodo: MetodoPago;
   monto: number;
+  puedeEditar: boolean;
   onEdit: (m: MetodoPago, monto: number) => void;
   onDelete: () => void;
 }) {
@@ -343,8 +355,12 @@ function FilaVenta({
     <div className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-stone-50">
       <span className="flex-1 text-stone-700">{METODO_LABEL[metodo]}</span>
       <span className="tabular-nums font-medium text-stone-800">{formatCOP(monto)}</span>
-      <button onClick={() => setEditando(true)} className="text-stone-300 hover:text-amber-600"><Pencil className="h-4 w-4" /></button>
-      <button onClick={onDelete} className="text-stone-300 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
+      {puedeEditar && (
+        <>
+          <button onClick={() => setEditando(true)} className="text-stone-300 hover:text-amber-600"><Pencil className="h-4 w-4" /></button>
+          <button onClick={onDelete} className="text-stone-300 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
+        </>
+      )}
     </div>
   );
 }
@@ -353,11 +369,13 @@ function FilaVenta({
 function FilaConcepto({
   concepto,
   monto,
+  puedeEditar,
   onEdit,
   onDelete,
 }: {
   concepto: string;
   monto: number;
+  puedeEditar: boolean;
   onEdit: (c: string, monto: number) => void;
   onDelete: () => void;
 }) {
@@ -381,8 +399,12 @@ function FilaConcepto({
     <div className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-stone-50">
       <span className="flex-1 text-stone-700">{concepto}</span>
       <span className="tabular-nums font-medium text-stone-800">{formatCOP(monto)}</span>
-      <button onClick={() => setEditando(true)} className="text-stone-300 hover:text-amber-600"><Pencil className="h-4 w-4" /></button>
-      <button onClick={onDelete} className="text-stone-300 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
+      {puedeEditar && (
+        <>
+          <button onClick={() => setEditando(true)} className="text-stone-300 hover:text-amber-600"><Pencil className="h-4 w-4" /></button>
+          <button onClick={onDelete} className="text-stone-300 hover:text-rose-500"><Trash2 className="h-4 w-4" /></button>
+        </>
+      )}
     </div>
   );
 }
