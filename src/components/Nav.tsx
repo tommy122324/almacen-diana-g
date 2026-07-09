@@ -6,19 +6,21 @@ import { LayoutDashboard, NotebookPen, Package, FileBarChart, Settings, Clock, L
 import { useStore } from "@/lib/store";
 
 const items = [
-  { href: "/", label: "Panel", corto: "Panel", icon: LayoutDashboard, soloAdmin: false },
-  { href: "/dia", label: "Registro del día", corto: "Registro", icon: NotebookPen, soloAdmin: false },
-  { href: "/apartados", label: "Apartados", corto: "Apartados", icon: Package, soloAdmin: false },
-  { href: "/tareas", label: "Tareas", corto: "Tareas", icon: ListChecks, soloAdmin: false },
-  { href: "/nomina", label: "Nómina", corto: "Nómina", icon: Clock, soloAdmin: false },
-  { href: "/reportes", label: "Reportes", corto: "Reportes", icon: FileBarChart, soloAdmin: true },
-  { href: "/ajustes", label: "Ajustes", corto: "Ajustes", icon: Settings, soloAdmin: true },
+  { href: "/", label: "Panel", corto: "Panel", icon: LayoutDashboard, soloAdmin: false, menuPerfil: false },
+  { href: "/dia", label: "Registro del día", corto: "Registro", icon: NotebookPen, soloAdmin: false, menuPerfil: false },
+  { href: "/apartados", label: "Apartados", corto: "Apartados", icon: Package, soloAdmin: false, menuPerfil: false },
+  { href: "/tareas", label: "Tareas", corto: "Tareas", icon: ListChecks, soloAdmin: false, menuPerfil: false },
+  { href: "/nomina", label: "Nómina", corto: "Nómina", icon: Clock, soloAdmin: false, menuPerfil: false },
+  // En celular, Reportes y Ajustes viven en el menú de perfil (no en la barra inferior)
+  { href: "/reportes", label: "Reportes", corto: "Reportes", icon: FileBarChart, soloAdmin: true, menuPerfil: true },
+  { href: "/ajustes", label: "Ajustes", corto: "Ajustes", icon: Settings, soloAdmin: true, menuPerfil: true },
 ];
 
-export function Nav() {
+/** `barra` = barra inferior del celular: oculta los ítems que van en el menú de perfil. */
+export function Nav({ barra = false }: { barra?: boolean }) {
   const path = usePathname();
   const esAdmin = useStore((s) => s.esAdmin);
-  const visibles = items.filter((i) => !i.soloAdmin || esAdmin);
+  const visibles = items.filter((i) => (!i.soloAdmin || esAdmin) && !(barra && i.menuPerfil));
   return (
     <nav className="flex gap-1 md:flex-col">
       {visibles.map(({ href, label, corto, icon: Icon }) => {

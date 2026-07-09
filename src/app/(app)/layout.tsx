@@ -8,6 +8,7 @@ import { useHydrated } from "@/lib/useHydrated";
 import { usuarioActual, logout } from "@/lib/auth";
 import { confirmar } from "@/lib/alerta";
 import { Nav } from "@/components/Nav";
+import { PerfilMenu } from "@/components/PerfilMenu";
 import { BusinessSelector } from "@/components/BusinessSelector";
 import { NotificacionesPedidos } from "@/components/NotificacionesPedidos";
 import { CodigoGate } from "@/components/CodigoGate";
@@ -118,16 +119,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex-1">
             <BusinessSelector />
           </div>
-          <button onClick={salir} className="rounded-lg p-2 text-stone-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Cerrar sesión">
-            <LogOut className="h-5 w-5" />
-          </button>
+          <PerfilMenu onSalir={salir} />
         </header>
 
         <main className="mx-auto w-full max-w-5xl flex-1 p-4 pb-24 md:p-8 md:pb-8">{children}</main>
 
         {/* Barra inferior (celular) */}
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-200 bg-white/95 p-2 backdrop-blur md:hidden">
-          <Nav />
+          <Nav barra />
         </nav>
       </div>
     </div>
