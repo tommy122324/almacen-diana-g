@@ -5,6 +5,7 @@ import { LogOut } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { suscribirCambios } from "@/lib/realtime";
 import { useHydrated } from "@/lib/useHydrated";
+import { useStoreHydrated } from "@/lib/useStoreHydrated";
 import { usuarioActual, logout } from "@/lib/auth";
 import { confirmar } from "@/lib/alerta";
 import { Nav } from "@/components/Nav";
@@ -15,6 +16,7 @@ import { CodigoGate } from "@/components/CodigoGate";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated();
+  const storeHydrated = useStoreHydrated();
   const router = useRouter();
   const [autorizado, setAutorizado] = useState(false);
   const [desbloqueado, setDesbloqueado] = useState(false);
@@ -45,8 +47,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [autorizado, negocioActivoId]);
 
   // Protección: sin sesión de Supabase, al login. Con sesión, carga los datos.
+  // Esperamos a que el store rehidrate desde el dispositivo (para no pisar datos offline).
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || !storeHydrated) return;
     usuarioActual().then((u) => {
       if (u) {
         setAutorizado(true);
@@ -55,7 +58,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         router.replace("/login");
       }
     });
-  }, [hydrated, router, cargarDesdeSupabase]);
+  }, [hydrated, storeHydrated, router, cargarDesdeSupabase]);
 
   async function salir() {
     if (await confirmar("¿Cerrar sesión?", "Tendrás que volver a ingresar con tu correo y contraseña.", "Sí, cerrar sesión")) {
@@ -66,7 +69,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }
 
-  if (!hydrated || !autorizado || (cargando && !cargado)) {
+  if (!hydrated || !storeHydrated || !autorizado || (cargando && !cargado)) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-stone-50">
         <div className="text-4xl">🐝</div>

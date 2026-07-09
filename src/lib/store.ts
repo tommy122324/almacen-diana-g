@@ -3,7 +3,9 @@
 // pero cada cambio se guarda en Supabase (la nube). Los datos se cargan por negocio.
 
 import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 import * as db from "./db";
+import { idbStorage } from "./idbStorage";
 import { avisarError } from "./alerta";
 import type {
   Negocio,
@@ -126,7 +128,9 @@ async function conError(fn: () => Promise<void>) {
   }
 }
 
-export const useStore = create<State>()((set, get) => ({
+export const useStore = create<State>()(
+  persist(
+    (set, get) => ({
   cargando: false,
   cargado: false,
   negocios: [],
@@ -196,6 +200,11 @@ export const useStore = create<State>()((set, get) => ({
     })),
 
   cargarDesdeSupabase: async () => {
+    // Sin conexión: usamos lo que quedó guardado en el dispositivo (no intentamos la red).
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      set({ cargando: false, cargado: true });
+      return;
+    }
     set({ cargando: true });
     try {
       let negocios = await db.cargarNegocios();
@@ -215,8 +224,10 @@ export const useStore = create<State>()((set, get) => ({
       set({ negocios, negocioActivoId: activo, ...base, ...mov, movDesde: p.desde, movHasta: p.hasta, config, miRol: rol, esAdmin: rol === "dueño" || rol === "admin", cargando: false, cargado: true });
     } catch (e) {
       console.error(e);
-      avisarError("No se pudieron cargar los datos");
-      set({ cargando: false });
+      // Si hay datos guardados en el dispositivo, seguimos con esos (modo sin conexión).
+      const hayCache = get().negocios.length > 0;
+      if (!hayCache) avisarError("No se pudieron cargar los datos");
+      set({ cargando: false, cargado: true });
     }
   },
 
@@ -397,4 +408,31 @@ export const useStore = create<State>()((set, get) => ({
         return { cuadres: [...otros, cuadre] };
       });
     }),
-}));
+    }),
+    {
+      name: "almacen-store",
+      storage: createJSONStorage(() => idbStorage),
+      // Guardamos solo los datos (no los estados temporales de carga en curso).
+      partialize: (s) => ({
+        negocios: s.negocios,
+        negocioActivoId: s.negocioActivoId,
+        ventas: s.ventas,
+        gastos: s.gastos,
+        entradas: s.entradas,
+        apartados: s.apartados,
+        metas: s.metas,
+        cuadres: s.cuadres,
+        config: s.config,
+        miRol: s.miRol,
+        esAdmin: s.esAdmin,
+        movDesde: s.movDesde,
+        movHasta: s.movHasta,
+        revision: s.revision,
+        cargado: s.cargado,
+        panelTipo: s.panelTipo,
+        panelDesde: s.panelDesde,
+        panelHasta: s.panelHasta,
+      }),
+    },
+  ),
+);

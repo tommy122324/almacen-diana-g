@@ -1,0 +1,14 @@
+{
+  "name": "Almacén Diana G",
+  "short_name": "Diana G",
+  "description": "Registro diario de ventas, gastos y utilidad.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fafaf9",
+  "theme_color": "#f59e0b",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

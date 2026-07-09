@@ -18,8 +18,20 @@ export async function logout() {
   await createClient().auth.signOut();
 }
 
-/** Usuario actual (o null). */
+/** Usuario actual (o null). Tolerante a estar sin conexión: usa la sesión guardada. */
 export async function usuarioActual(): Promise<User | null> {
-  const { data } = await createClient().auth.getUser();
-  return data.user ?? null;
+  const c = createClient();
+  // Sin conexión: la sesión guardada localmente basta para dejar entrar (RLS protege en el servidor).
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    const { data } = await c.auth.getSession();
+    return data.session?.user ?? null;
+  }
+  try {
+    const { data } = await c.auth.getUser();
+    if (data.user) return data.user;
+  } catch {
+    /* red caída: caemos a la sesión guardada */
+  }
+  const { data } = await c.auth.getSession();
+  return data.session?.user ?? null;
 }
