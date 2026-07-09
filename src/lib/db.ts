@@ -299,12 +299,38 @@ export async function guardarConfig(negocioId: string, patch: Partial<Configurac
 }
 
 // ---------- Códigos de acceso (Fase 7b) ----------
+// Fin del día siguiente en hora Bogotá (UTC-5), como instante UTC.
+function finDeMananaBogota(): string {
+  const b = new Date(Date.now() - 5 * 3600 * 1000); // campos UTC = reloj Bogotá
+  b.setUTCHours(23, 59, 59, 0);
+  b.setUTCDate(b.getUTCDate() + 1); // mañana
+  return new Date(b.getTime() + 5 * 3600 * 1000).toISOString(); // volver a UTC real
+}
+
 export async function generarCodigo(negocioId: string): Promise<{ codigo: string; expiraEn: string }> {
+  await db().from("codigos").delete().eq("negocio_id", negocioId); // solo un código activo
   const codigo = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
-  const expiraEn = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const expiraEn = finDeMananaBogota();
   const { error } = await db().from("codigos").insert({ negocio_id: negocioId, codigo, expira_en: expiraEn });
   if (error) throw error;
   return { codigo, expiraEn };
+}
+
+export async function codigoActivo(negocioId: string): Promise<{ codigo: string; expiraEn: string } | null> {
+  const { data } = await db()
+    .from("codigos")
+    .select("codigo, expira_en")
+    .eq("negocio_id", negocioId)
+    .gt("expira_en", new Date().toISOString())
+    .order("creado_en", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ? { codigo: s(data.codigo), expiraEn: s(data.expira_en) } : null;
+}
+
+export async function cancelarCodigo(negocioId: string): Promise<void> {
+  const { error } = await db().from("codigos").delete().eq("negocio_id", negocioId);
+  if (error) throw error;
 }
 
 export async function validarCodigo(negocioId: string, codigo: string): Promise<boolean> {
