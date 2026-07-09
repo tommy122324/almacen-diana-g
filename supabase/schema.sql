@@ -344,6 +344,13 @@ grant select, insert, update, delete on all tables in schema public to anon, aut
 alter default privileges in schema public
   grant select, insert, update, delete on tables to anon, authenticated;
 
+-- service_role (llave secreta): acceso total (necesario porque se desactivó "auto expose")
+grant usage on schema public to service_role;
+grant all on all tables in schema public to service_role;
+grant all on all sequences in schema public to service_role;
+alter default privileges in schema public grant all on tables to service_role;
+alter default privileges in schema public grant all on sequences to service_role;
+
 -- ============================================================
 -- Fin del esquema. Almacén Diana G 🐝
 -- ============================================================
