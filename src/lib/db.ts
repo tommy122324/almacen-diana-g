@@ -569,3 +569,49 @@ export async function upsertCuadre(c: {
   if (error) throw error;
   return mCuadre(data);
 }
+
+// ---------- Respaldo (copia de seguridad) ----------
+// Tablas del negocio que tienen columna negocio_id.
+const TABLAS_NEGOCIO = ["ventas", "gastos", "entradas", "apartados", "metas", "cuadres", "registros_hora", "tareas", "configuracion"] as const;
+
+/** Descarga TODOS los datos del negocio (filas crudas) para un respaldo. */
+export async function exportarDatos(negocioId: string): Promise<Record<string, Row[]>> {
+  const c = db();
+  const out: Record<string, Row[]> = {};
+  for (const t of TABLAS_NEGOCIO) {
+    const { data, error } = await c.from(t).select("*").eq("negocio_id", negocioId);
+    if (error) throw error;
+    out[t] = (data ?? []) as Row[];
+  }
+  // Abonos: se relacionan por apartado (no tienen negocio_id)
+  const apIds = (out.apartados ?? []).map((a) => a.id as string);
+  if (apIds.length) {
+    const { data, error } = await c.from("abonos").select("*").in("apartado_id", apIds);
+    if (error) throw error;
+    out.abonos = (data ?? []) as Row[];
+  } else {
+    out.abonos = [];
+  }
+  return out;
+}
+
+/**
+ * Restaura un respaldo en el MISMO negocio: vuelve a insertar los registros por id
+ * (los que ya existan se dejan igual). Sirve para recuperar datos borrados por error.
+ */
+export async function restaurarDatos(negocioId: string, datos: Record<string, Row[]>): Promise<void> {
+  const c = db();
+  const conNegocio = (rows: Row[] | undefined) => (rows ?? []).map((r) => ({ ...r, negocio_id: negocioId }));
+  const upsert = async (tabla: string, rows: Row[]) => {
+    if (!rows.length) return;
+    const { error } = await c.from(tabla).upsert(rows);
+    if (error) throw error;
+  };
+  // Primero apartados (los abonos dependen de ellos)
+  await upsert("apartados", conNegocio(datos.apartados));
+  await upsert("abonos", datos.abonos ?? []); // sin negocio_id
+  for (const t of ["ventas", "gastos", "entradas", "metas", "cuadres", "registros_hora", "tareas"]) {
+    await upsert(t, conNegocio(datos[t]));
+  }
+  await upsert("configuracion", conNegocio(datos.configuracion));
+}

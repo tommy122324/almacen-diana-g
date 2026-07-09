@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
-import { MessageCircle, Save, Check, Lock, KeyRound, RefreshCw, Trash2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { MessageCircle, Save, Check, Lock, KeyRound, RefreshCw, Trash2, DatabaseBackup, Download, Upload, FileSpreadsheet } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { avisar, avisarError, confirmar } from "@/lib/alerta";
 import { telefonoWhatsApp } from "@/lib/whatsapp";
 import { generarCodigo, codigoActivo, cancelarCodigo } from "@/lib/db";
+import { descargarRespaldoJSON, descargarRespaldoExcel, restaurarRespaldoDesdeArchivo } from "@/lib/backup";
 import { Card, Boton, Input, Field } from "@/components/ui";
 import { MoneyInput } from "@/components/MoneyInput";
 import { GestionUsuarios } from "@/components/GestionUsuarios";
@@ -87,7 +88,86 @@ export default function Ajustes() {
       </Card>
 
       <CodigosAdmin />
+
+      <RespaldoAdmin />
     </div>
+  );
+}
+
+function RespaldoAdmin() {
+  const negocioId = useStore((s) => s.negocioActivoId);
+  const negocios = useStore((s) => s.negocios);
+  const refrescarRemoto = useStore((s) => s.refrescarRemoto);
+  const nombre = negocios.find((n) => n.id === negocioId)?.nombre ?? "Almacén Diana G";
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [ocupado, setOcupado] = useState<"" | "json" | "excel" | "restaurar">("");
+
+  async function bajarJSON() {
+    if (!negocioId) return;
+    setOcupado("json");
+    try {
+      await descargarRespaldoJSON(negocioId, nombre);
+      avisar("Respaldo descargado");
+    } catch {
+      avisarError("No se pudo generar el respaldo");
+    } finally {
+      setOcupado("");
+    }
+  }
+  async function bajarExcel() {
+    if (!negocioId) return;
+    setOcupado("excel");
+    try {
+      await descargarRespaldoExcel(negocioId, nombre);
+    } catch {
+      avisarError("No se pudo generar el Excel");
+    } finally {
+      setOcupado("");
+    }
+  }
+  async function alElegirArchivo(e: React.ChangeEvent<HTMLInputElement>) {
+    const archivo = e.target.files?.[0];
+    e.target.value = ""; // permite volver a elegir el mismo archivo
+    if (!archivo || !negocioId) return;
+    if (!(await confirmar("¿Restaurar este respaldo?", "Se volverán a agregar los registros del archivo a ESTE negocio. Los datos actuales no se borran; los repetidos se dejan igual.", "Sí, restaurar"))) return;
+    setOcupado("restaurar");
+    try {
+      const { total } = await restaurarRespaldoDesdeArchivo(negocioId, archivo);
+      await refrescarRemoto();
+      avisar(`Respaldo restaurado (${total} registros)`);
+    } catch (err) {
+      avisarError(err instanceof Error ? err.message : "No se pudo restaurar");
+    } finally {
+      setOcupado("");
+    }
+  }
+
+  return (
+    <Card>
+      <div className="mb-1 flex items-center gap-2 font-semibold text-stone-800">
+        <DatabaseBackup className="h-5 w-5 text-sky-600" /> Copia de seguridad
+      </div>
+      <p className="mb-3 text-xs text-stone-500">
+        Descarga todos tus datos y guárdalos en tu computador o celular. Hazlo cada cierto tiempo (por ejemplo, al cerrar el mes) para tener un respaldo por si algo se borra por error.
+      </p>
+
+      <div className="flex flex-wrap gap-2">
+        <Boton onClick={bajarJSON} disabled={ocupado !== ""}>
+          <Download className="h-4 w-4" /> {ocupado === "json" ? "Generando…" : "Descargar respaldo (.json)"}
+        </Boton>
+        <Boton variant="outline" onClick={bajarExcel} disabled={ocupado !== ""}>
+          <FileSpreadsheet className="h-4 w-4" /> {ocupado === "excel" ? "Generando…" : "Descargar en Excel"}
+        </Boton>
+        <Boton variant="outline" onClick={() => fileRef.current?.click()} disabled={ocupado !== ""}>
+          <Upload className="h-4 w-4" /> {ocupado === "restaurar" ? "Restaurando…" : "Restaurar respaldo"}
+        </Boton>
+        <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={alElegirArchivo} />
+      </div>
+
+      <div className="mt-3 rounded-xl bg-sky-50 p-3 text-xs text-stone-600">
+        <b>¿Cuál uso?</b> El <b>.json</b> es el respaldo de verdad (sirve para <b>restaurar</b>). El <b>Excel</b> es solo para leer/imprimir los datos. Al restaurar, los registros vuelven al mismo negocio y los que ya existan no se duplican.
+      </div>
+    </Card>
   );
 }
 
