@@ -64,6 +64,11 @@ interface State {
   panelHasta: string;
   setPanelPeriodo: (p: { tipo?: TipoPeriodo; desde?: string; hasta?: string }) => void;
 
+  // Sincronía en tiempo real: se incrementa cuando llega un cambio remoto,
+  // para que las pantallas que cargan sus propios datos (nómina) se refresquen.
+  revision: number;
+  refrescarRemoto: () => Promise<void>;
+
   cargarDesdeSupabase: () => Promise<void>;
   limpiar: () => void;
 
@@ -126,6 +131,17 @@ export const useStore = create<State>()((set, get) => ({
   config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 },
   miRol: "",
   esAdmin: false,
+  revision: 0,
+  refrescarRemoto: async () => {
+    const negocioId = get().negocioActivoId;
+    if (!negocioId) return;
+    try {
+      const [datos, config] = await Promise.all([db.cargarTodo(negocioId), db.cargarConfig(negocioId)]);
+      set((s) => ({ ...datos, config, revision: s.revision + 1 }));
+    } catch (e) {
+      console.error(e);
+    }
+  },
   setConfig: (patch) =>
     conError(async () => {
       const negocioId = get().negocioActivoId;

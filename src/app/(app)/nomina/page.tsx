@@ -1,14 +1,25 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Clock, CheckCircle2, AlertTriangle, FileText, User, DollarSign } from "lucide-react";
+import { Clock, CheckCircle2, AlertTriangle, FileText, User, DollarSign, Ban, RotateCcw, Timer } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { registrarEntrada, miRegistroHoy, cargarRegistrosHora, cargarPagosEmpleado, insertPagoEmpleado, cargarMiembros, type Miembro } from "@/lib/db";
+import {
+  registrarEntrada,
+  miRegistroHoy,
+  cargarRegistrosHora,
+  cargarPagosEmpleado,
+  insertPagoEmpleado,
+  cargarMiembros,
+  marcarEntradaATiempo,
+  anularEntrada,
+  type Miembro,
+} from "@/lib/db";
 import type { RegistroHora, Gasto } from "@/lib/types";
-import { avisar, avisarError } from "@/lib/alerta";
+import { avisar, avisarError, confirmar } from "@/lib/alerta";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { exportarNominaPDF } from "@/lib/export";
-import { Card, Boton, Input, Field, StatCard, Select } from "@/components/ui";
+import { Card, Boton, Input, StatCard, Select, Chip } from "@/components/ui";
 import { MoneyInput } from "@/components/MoneyInput";
+import { FirmaPad } from "@/components/FirmaPad";
 
 export default function Nomina() {
   const esAdmin = useStore((s) => s.esAdmin);
@@ -18,13 +29,13 @@ export default function Nomina() {
 /* ─── Empleado: registrar entrada ─── */
 function MiEntrada() {
   const negocioId = useStore((s) => s.negocioActivoId);
+  const revision = useStore((s) => s.revision);
   const [registro, setRegistro] = useState<RegistroHora | null>(null);
   const [cargando, setCargando] = useState(true);
   const [registrando, setRegistrando] = useState(false);
 
   const cargar = useCallback(async () => {
     if (!negocioId) return;
-    setCargando(true);
     try {
       setRegistro(await miRegistroHoy(negocioId));
     } catch {
@@ -35,7 +46,7 @@ function MiEntrada() {
   }, [negocioId]);
   useEffect(() => {
     cargar();
-  }, [cargar]);
+  }, [cargar, revision]);
 
   async function registrar() {
     if (!negocioId) return;
@@ -59,7 +70,7 @@ function MiEntrada() {
       <h1 className="text-2xl font-bold text-stone-800">Mi entrada</h1>
       {cargando ? (
         <Card><p className="text-sm text-stone-400">Cargando…</p></Card>
-      ) : registro ? (
+      ) : registro && !registro.anulada ? (
         <Card>
           <div className="flex items-center gap-3 text-emerald-700">
             <CheckCircle2 className="h-8 w-8" />
@@ -68,7 +79,7 @@ function MiEntrada() {
               <div className="text-sm text-stone-500">A las {registro.hora}</div>
             </div>
           </div>
-          {registro.minutosTarde > 0 && (
+          {registro.minutosTarde > 0 ? (
             <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
               <div className="flex items-center gap-1 font-semibold">
                 <AlertTriangle className="h-4 w-4" /> Llegaste {registro.minutosTarde} min tarde
@@ -77,6 +88,10 @@ function MiEntrada() {
                 Tu tiempo de retraso será descontado de tu sueldo de la próxima quincena. Descuento:{" "}
                 <b>{formatCOP(registro.descuento)}</b>.
               </p>
+            </div>
+          ) : (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+              ¡Llegaste a tiempo! Sin descuentos. 🎉
             </div>
           )}
         </Card>
@@ -109,6 +124,8 @@ function rangoMes(am: string) {
 function NominaAdmin() {
   const negocioId = useStore((s) => s.negocioActivoId);
   const negocios = useStore((s) => s.negocios);
+  const salario = useStore((s) => s.config.salarioMinimo); // reactivo: cambia al instante
+  const revision = useStore((s) => s.revision);
   const negocio = negocios.find((n) => n.id === negocioId)?.nombre ?? "Almacén Diana G";
 
   const [empleados, setEmpleados] = useState<Miembro[]>([]);
@@ -118,15 +135,18 @@ function NominaAdmin() {
   const [pagos, setPagos] = useState<Gasto[]>([]);
   const [concepto, setConcepto] = useState("");
   const [monto, setMonto] = useState(0);
+  const [firma, setFirma] = useState("");
+  const [firmaKey, setFirmaKey] = useState(0);
+  const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     if (!negocioId) return;
     cargarMiembros(negocioId).then((ms) => {
       const emp = ms.filter((m) => m.rol === "empleado");
       setEmpleados(emp);
-      if (emp.length && !selId) setSelId(emp[0].usuarioId);
+      setSelId((prev) => prev || (emp[0]?.usuarioId ?? ""));
     });
-  }, [negocioId, selId]);
+  }, [negocioId]);
 
   const cargarDetalle = useCallback(async () => {
     if (!negocioId || !selId) {
@@ -144,15 +164,21 @@ function NominaAdmin() {
   }, [negocioId, selId, mes]);
   useEffect(() => {
     cargarDetalle();
-  }, [cargarDetalle]);
+  }, [cargarDetalle, revision]);
 
   const sel = empleados.find((e) => e.usuarioId === selId);
-  const totalDesc = registros.reduce((s, r) => s + r.descuento, 0);
+  const totalDesc = registros.filter((r) => !r.anulada).reduce((s, r) => s + r.descuento, 0);
   const totalPagos = pagos.reduce((s, p) => s + p.monto, 0);
+  const seLeDebe = salario - totalDesc - totalPagos;
   const mesLabel = new Date(mes + "-01T00:00").toLocaleDateString("es-CO", { month: "long", year: "numeric" });
 
   async function pagar() {
     if (!negocioId || !selId || monto <= 0) return;
+    if (!firma) {
+      avisarError("Falta la firma del empleado para registrar el pago.");
+      return;
+    }
+    setGuardando(true);
     try {
       const hoy = new Date().toLocaleDateString("sv", { timeZone: "America/Bogota" });
       await insertPagoEmpleado({
@@ -161,13 +187,39 @@ function NominaAdmin() {
         concepto: concepto.trim() || `Pago a ${sel?.nombre || sel?.email}`,
         monto,
         fecha: hoy,
+        firma,
       });
       avisar("Pago registrado (también se sumó a gastos)");
       setConcepto("");
       setMonto(0);
+      setFirma("");
+      setFirmaKey((k) => k + 1);
       await cargarDetalle();
     } catch {
       avisarError("No se pudo registrar el pago");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function aTiempo(r: RegistroHora) {
+    try {
+      await marcarEntradaATiempo(r.id);
+      avisar("Marcada como a tiempo");
+      await cargarDetalle();
+    } catch {
+      avisarError("No se pudo actualizar");
+    }
+  }
+  async function togglAnular(r: RegistroHora) {
+    const anular = !r.anulada;
+    if (anular && !(await confirmar("¿Anular esta entrada?", "No contará para descuentos, pero el empleado NO podrá volver a registrarla hoy.", "Sí, anular"))) return;
+    try {
+      await anularEntrada(r.id, anular);
+      avisar(anular ? "Entrada anulada" : "Entrada restaurada");
+      await cargarDetalle();
+    } catch {
+      avisarError("No se pudo actualizar");
     }
   }
 
@@ -193,15 +245,18 @@ function NominaAdmin() {
               <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className="w-auto" />
             </label>
             {sel && (
-              <Boton variant="outline" onClick={() => exportarNominaPDF({ negocio, empleado: sel.nombre || sel.email, mesLabel, registros, pagos })}>
+              <Boton variant="outline" onClick={() => exportarNominaPDF({ negocio, empleado: sel.nombre || sel.email, mesLabel, salario, registros, pagos })}>
                 <FileText className="h-4 w-4" /> PDF del mes
               </Boton>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Cuenta del mes */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatCard label="Sueldo del mes" value={salario} tone="default" />
             <StatCard label="Descuentos por retraso" value={totalDesc} tone="red" />
             <StatCard label="Pagado en el mes" value={totalPagos} tone="green" />
+            <StatCard label="Se le debe" value={seLeDebe} tone={seLeDebe >= 0 ? "amber" : "green"} hint={salario === 0 ? "Configura el salario en Ajustes" : undefined} />
           </div>
 
           {/* Entradas / retrasos */}
@@ -212,46 +267,71 @@ function NominaAdmin() {
             {registros.length === 0 ? (
               <p className="text-sm text-stone-400">Sin registros de entrada este mes.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-stone-200 text-left text-xs text-stone-500">
-                    <th className="py-1">Fecha</th>
-                    <th className="py-1">Entrada</th>
-                    <th className="py-1 text-right">Min. tarde</th>
-                    <th className="py-1 text-right">Descuento</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {registros.map((r) => (
-                    <tr key={r.id} className="border-b border-stone-100">
-                      <td className="py-1.5">{formatFechaCorta(r.fecha)}</td>
-                      <td className="py-1.5">{r.hora}</td>
-                      <td className={`py-1.5 text-right ${r.minutosTarde > 0 ? "text-rose-600" : "text-stone-400"}`}>{r.minutosTarde || "-"}</td>
-                      <td className="py-1.5 text-right tabular-nums text-rose-600">{r.descuento ? formatCOP(r.descuento) : "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="space-y-1">
+                {registros.map((r) => (
+                  <div key={r.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-2 py-2 text-sm ${r.anulada ? "opacity-50" : "hover:bg-stone-50"}`}>
+                    <span className="w-20 text-stone-500">{formatFechaCorta(r.fecha)}</span>
+                    <span className="w-14 font-medium text-stone-700">{r.hora}</span>
+                    {r.anulada ? (
+                      <Chip tone="stone">Anulada</Chip>
+                    ) : r.minutosTarde > 0 ? (
+                      <>
+                        <Chip tone="red">{r.minutosTarde} min tarde</Chip>
+                        <span className="tabular-nums font-medium text-rose-600">−{formatCOP(r.descuento)}</span>
+                      </>
+                    ) : (
+                      <Chip tone="green">A tiempo</Chip>
+                    )}
+                    <div className="ml-auto flex gap-1">
+                      {!r.anulada && r.minutosTarde > 0 && (
+                        <button onClick={() => aTiempo(r)} title="Marcar que llegó a tiempo" className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-emerald-600 hover:bg-emerald-50">
+                          <Timer className="h-3.5 w-3.5" /> Llegó a tiempo
+                        </button>
+                      )}
+                      <button onClick={() => togglAnular(r)} title={r.anulada ? "Restaurar" : "Anular"} className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-stone-500 hover:bg-stone-100">
+                        {r.anulada ? <><RotateCcw className="h-3.5 w-3.5" /> Restaurar</> : <><Ban className="h-3.5 w-3.5" /> Anular</>}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </Card>
 
-          {/* Pagos / abonos */}
+          {/* Pagos / abonos con firma */}
           <Card>
             <div className="mb-2 flex items-center gap-2 font-semibold text-stone-800">
               <DollarSign className="h-4 w-4 text-emerald-600" /> Pagos y abonos al empleado
             </div>
-            <p className="mb-3 text-xs text-stone-500">Cada pago o abono se suma automáticamente a los gastos del almacén.</p>
+            <p className="mb-3 text-xs text-stone-500">Cada pago o abono se suma a los gastos del almacén. El empleado firma como constancia de recibido.</p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input value={concepto} onChange={(e) => setConcepto(e.target.value)} placeholder="Concepto (ej: abono quincena)" className="flex-1" />
-              <MoneyInput value={monto} onChange={setMonto} onEnter={pagar} className="sm:w-40" />
-              <Boton onClick={pagar}><DollarSign className="h-4 w-4" /> Registrar pago</Boton>
+              <MoneyInput value={monto} onChange={setMonto} className="sm:w-40" />
             </div>
-            <div className="mt-3 space-y-1">
+            <div className="mt-3">
+              <span className="mb-1 block text-xs font-medium text-stone-500">Firma del empleado (recibí conforme)</span>
+              <FirmaPad key={firmaKey} onChange={setFirma} />
+            </div>
+            <div className="mt-2">
+              <Boton onClick={pagar} disabled={guardando}>
+                <DollarSign className="h-4 w-4" /> {guardando ? "Guardando…" : "Registrar pago"}
+              </Boton>
+            </div>
+
+            <div className="mt-4 space-y-1 border-t border-stone-100 pt-3">
               {pagos.length === 0 && <p className="px-1 text-sm text-stone-400">Sin pagos este mes.</p>}
               {pagos.map((p) => (
                 <div key={p.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-stone-50">
                   <span className="text-stone-400">{formatFechaCorta(p.fecha)}</span>
                   <span className="flex-1">{p.concepto}</span>
+                  {p.firma ? (
+                    <a href={p.firma} target="_blank" rel="noreferrer" title="Ver firma">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.firma} alt="firma" className="h-7 w-16 rounded border border-stone-200 object-contain" />
+                    </a>
+                  ) : (
+                    <span className="text-xs text-stone-300">sin firma</span>
+                  )}
                   <span className="tabular-nums font-medium text-emerald-600">{formatCOP(p.monto)}</span>
                 </div>
               ))}
@@ -260,7 +340,7 @@ function NominaAdmin() {
 
           <div className="rounded-xl bg-stone-50 p-3 text-xs text-stone-500 flex items-start gap-2">
             <User className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
-            El empleado registra su entrada desde su propia sesión; aquí lo ves apenas abres esta sección.
+            El empleado registra su entrada desde su propia sesión; aquí se actualiza solo. El sueldo del mes se toma de Ajustes.
           </div>
         </>
       )}

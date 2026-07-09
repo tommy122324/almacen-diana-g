@@ -163,11 +163,12 @@ function abonadoLocal(a: Apartado): number {
   return a.abonos.reduce((s, ab) => s + ab.monto, 0);
 }
 
-/** PDF de nómina de un empleado: entradas/retrasos + pagos del mes. */
+/** PDF de nómina de un empleado: cuenta del mes + entradas/retrasos + pagos con firma. */
 export async function exportarNominaPDF(d: {
   negocio: string;
   empleado: string;
   mesLabel: string;
+  salario: number;
   registros: RegistroHora[];
   pagos: Gasto[];
 }) {
@@ -182,13 +183,37 @@ export async function exportarNominaPDF(d: {
   doc.text(`${d.negocio} · ${d.mesLabel}`, M, 25);
   doc.setTextColor(0);
 
-  const totalDesc = d.registros.reduce((s, r) => s + r.descuento, 0);
+  const totalDesc = d.registros.filter((r) => !r.anulada).reduce((s, r) => s + r.descuento, 0);
   const totalPagos = d.pagos.reduce((s, p) => s + p.monto, 0);
+  const seLeDebe = d.salario - totalDesc - totalPagos;
 
+  // Resumen de la cuenta del mes
   autoTable(doc, {
     startY: 31,
+    head: [["Concepto", "Valor"]],
+    body: [
+      ["Sueldo del mes", formatCOP(d.salario)],
+      ["− Descuentos por retraso", formatCOP(totalDesc)],
+      ["− Pagos/abonos hechos", formatCOP(totalPagos)],
+    ],
+    foot: [["Se le debe", formatCOP(seLeDebe)]],
+    theme: "plain",
+    headStyles: { fillColor: [245, 245, 244], textColor: 80, fontStyle: "bold" },
+    footStyles: { fillColor: [254, 243, 199], textColor: 0, fontStyle: "bold" },
+    columnStyles: { 1: { halign: "right" } },
+    margin: { left: M, right: M },
+  });
+
+  let y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  autoTable(doc, {
+    startY: y,
     head: [["Fecha", "Entrada", "Min. tarde", "Descuento"]],
-    body: d.registros.map((r) => [formatFechaCorta(r.fecha), r.hora, r.minutosTarde || "-", r.descuento ? formatCOP(r.descuento) : "-"]),
+    body: d.registros.map((r) => [
+      formatFechaCorta(r.fecha) + (r.anulada ? " (anulada)" : ""),
+      r.hora,
+      r.anulada ? "-" : r.minutosTarde || "-",
+      r.anulada ? "-" : r.descuento ? formatCOP(r.descuento) : "-",
+    ]),
     foot: [["", "", "Total descuentos", formatCOP(totalDesc)]],
     theme: "striped",
     headStyles: { fillColor: [217, 119, 6] },
@@ -196,17 +221,43 @@ export async function exportarNominaPDF(d: {
     margin: { left: M, right: M },
   });
 
-  const y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
   autoTable(doc, {
     startY: y,
-    head: [["Fecha", "Concepto", "Pagado"]],
-    body: d.pagos.map((p) => [formatFechaCorta(p.fecha), p.concepto, formatCOP(p.monto)]),
-    foot: [["", "Total pagado", formatCOP(totalPagos)]],
+    head: [["Fecha", "Concepto", "Firma", "Pagado"]],
+    body: d.pagos.map((p) => [formatFechaCorta(p.fecha), p.concepto, p.firma ? "Sí" : "—", formatCOP(p.monto)]),
+    foot: [["", "", "Total pagado", formatCOP(totalPagos)]],
     theme: "grid",
     headStyles: { fillColor: [16, 185, 129] },
     footStyles: { fillColor: [209, 250, 229], textColor: 0, fontStyle: "bold" },
     margin: { left: M, right: M },
   });
+
+  // Firmas (imágenes) como constancia de los pagos
+  const conFirma = d.pagos.filter((p) => p.firma);
+  if (conFirma.length) {
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+    doc.setFontSize(11);
+    doc.text("Firmas de recibido", M, y);
+    y += 4;
+    for (const p of conFirma) {
+      if (y > 250) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.setFontSize(9);
+      doc.setTextColor(120);
+      doc.text(`${formatFechaCorta(p.fecha)} · ${p.concepto} · ${formatCOP(p.monto)}`, M, y + 4);
+      doc.setTextColor(0);
+      try {
+        doc.addImage(p.firma!, "PNG", M, y + 6, 60, 24);
+      } catch {
+        /* firma inválida: se omite */
+      }
+      doc.rect(M, y + 6, 60, 24);
+      y += 34;
+    }
+  }
 
   doc.save(`Nomina_${d.empleado.replace(/[^\w]+/g, "_")}_${d.mesLabel.replace(/[^\w]+/g, "_")}.pdf`);
 }

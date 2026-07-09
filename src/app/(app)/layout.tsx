@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { suscribirCambios } from "@/lib/realtime";
 import { useHydrated } from "@/lib/useHydrated";
 import { usuarioActual, logout } from "@/lib/auth";
 import { confirmar } from "@/lib/alerta";
@@ -21,10 +22,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const esAdmin = useStore((s) => s.esAdmin);
   const cargarDesdeSupabase = useStore((s) => s.cargarDesdeSupabase);
   const limpiar = useStore((s) => s.limpiar);
+  const negocioActivoId = useStore((s) => s.negocioActivoId);
 
   useEffect(() => {
     setDesbloqueado(sessionStorage.getItem("cb-desbloqueo") === "1");
   }, []);
+
+  // Tiempo real: cuando cambia algo en la nube (otro dispositivo), refresca.
+  useEffect(() => {
+    if (!autorizado || !negocioActivoId) return;
+    let t: number | undefined;
+    const onCambio = () => {
+      if (t) window.clearTimeout(t);
+      t = window.setTimeout(() => useStore.getState().refrescarRemoto(), 400);
+    };
+    const cancelar = suscribirCambios(negocioActivoId, onCambio);
+    return () => {
+      if (t) window.clearTimeout(t);
+      cancelar();
+    };
+  }, [autorizado, negocioActivoId]);
 
   // Protección: sin sesión de Supabase, al login. Con sesión, carga los datos.
   useEffect(() => {

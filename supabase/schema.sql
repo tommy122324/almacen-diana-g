@@ -446,6 +446,39 @@ $$;
 grant execute on function public.registrar_entrada(uuid) to authenticated;
 
 -- ============================================================
+-- FASE 7d — Sincronía en tiempo real · firma de pagos · corrección de entradas
+-- ============================================================
+
+-- Firma del empleado (data URL) al recibir un pago de nómina
+alter table public.gastos add column if not exists firma text;
+
+-- Entrada anulada por el admin (sigue bloqueando el reintento del día)
+alter table public.registros_hora add column if not exists anulada boolean not null default false;
+
+-- El admin puede corregir entradas (marcar "llegó a tiempo" / anular).
+-- No hay política de DELETE: así la entrada del día no se puede borrar de verdad
+-- y el empleado no puede volver a registrarla.
+drop policy if exists rh_upd on public.registros_hora;
+create policy rh_upd on public.registros_hora for update
+  using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
+
+-- Realtime: publicar los cambios de estas tablas para sincronizar dispositivos.
+-- (RLS sigue decidiendo qué filas recibe cada usuario.)
+do $$
+declare t text;
+begin
+  foreach t in array array['ventas','gastos','entradas','apartados','abonos','cuadres','metas','registros_hora','configuracion']
+  loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
+
+-- ============================================================
 -- Permisos para el rol de la app (la seguridad real la pone RLS)
 -- ============================================================
 grant usage on schema public to anon, authenticated;

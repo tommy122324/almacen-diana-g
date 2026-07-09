@@ -33,7 +33,16 @@ function mVenta(r: Row): Venta {
   return { id: s(r.id), negocioId: s(r.negocio_id), fecha: s(r.fecha), metodo: r.metodo as MetodoPago, monto: n(r.monto), creadoEn: s(r.creado_en) };
 }
 function mGasto(r: Row): Gasto {
-  return { id: s(r.id), negocioId: s(r.negocio_id), fecha: s(r.fecha), concepto: s(r.concepto), monto: n(r.monto), creadoEn: s(r.creado_en) };
+  return {
+    id: s(r.id),
+    negocioId: s(r.negocio_id),
+    fecha: s(r.fecha),
+    concepto: s(r.concepto),
+    monto: n(r.monto),
+    creadoEn: s(r.creado_en),
+    empleadoId: r.empleado_id ? s(r.empleado_id) : undefined,
+    firma: r.firma ? s(r.firma) : undefined,
+  };
 }
 function mEntrada(r: Row): Entrada {
   return { id: s(r.id), negocioId: s(r.negocio_id), fecha: s(r.fecha), concepto: s(r.concepto), monto: n(r.monto), creadoEn: s(r.creado_en) };
@@ -317,7 +326,20 @@ function mRegistroHora(r: Row): RegistroHora {
     hora: new Date(s(r.hora_entrada)).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", timeZone: "America/Bogota" }),
     minutosTarde: n(r.minutos_tarde),
     descuento: n(r.descuento),
+    anulada: Boolean(r.anulada),
   };
+}
+
+/** (Admin) Marca una entrada como "llegó a tiempo": quita minutos tarde y descuento. */
+export async function marcarEntradaATiempo(id: string): Promise<void> {
+  const { error } = await db().from("registros_hora").update({ minutos_tarde: 0, descuento: 0 }).eq("id", id);
+  if (error) throw error;
+}
+
+/** (Admin) Anula una entrada (por un malentendido). Sigue contando como registrada ese día. */
+export async function anularEntrada(id: string, anulada: boolean): Promise<void> {
+  const { error } = await db().from("registros_hora").update({ anulada }).eq("id", id);
+  if (error) throw error;
 }
 
 /** Registro de hora del usuario actual para hoy (o null). */
@@ -354,13 +376,14 @@ export async function cargarRegistrosHora(negocioId: string, usuarioId: string, 
 }
 
 /** (Admin) Registra un pago/abono a un empleado → se guarda como gasto. */
-export async function insertPagoEmpleado(p: { negocioId: string; empleadoId: string; concepto: string; monto: number; fecha: string }): Promise<void> {
+export async function insertPagoEmpleado(p: { negocioId: string; empleadoId: string; concepto: string; monto: number; fecha: string; firma?: string }): Promise<void> {
   const { error } = await db().from("gastos").insert({
     negocio_id: p.negocioId,
     fecha: p.fecha,
     concepto: p.concepto,
     monto: p.monto,
     empleado_id: p.empleadoId,
+    firma: p.firma ?? null,
   });
   if (error) throw error;
 }

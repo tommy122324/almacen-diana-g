@@ -55,6 +55,8 @@ export interface Gasto {
   concepto: string;
   monto: number;
   creadoEn: string;
+  empleadoId?: string; // si es un pago de nómina
+  firma?: string; // firma del empleado (data URL) cuando es pago de nómina
 }
 
 export interface Entrada {
@@ -110,6 +112,7 @@ export interface RegistroHora {
   hora: string; // "HH:MM"
   minutosTarde: number;
   descuento: number;
+  anulada?: boolean; // el admin la anuló (sigue bloqueando el reintento del día)
 }
 
 export interface Cuadre {
