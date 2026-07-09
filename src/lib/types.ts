@@ -100,6 +100,16 @@ export interface Meta {
 export interface Configuracion {
   whatsapp: string; // número de WhatsApp del almacén
   correoCodigos: string; // correo a donde llegan los códigos (Fase 7)
+  salarioMinimo: number; // salario mínimo mensual (para calcular descuentos por retraso)
+}
+
+export interface RegistroHora {
+  id: string;
+  usuarioId: string;
+  fecha: string;
+  hora: string; // "HH:MM"
+  minutosTarde: number;
+  descuento: number;
 }
 
 export interface Cuadre {

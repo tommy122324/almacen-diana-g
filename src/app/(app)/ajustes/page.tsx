@@ -6,6 +6,7 @@ import { avisar, avisarError, confirmar } from "@/lib/alerta";
 import { telefonoWhatsApp } from "@/lib/whatsapp";
 import { generarCodigo, codigoActivo, cancelarCodigo } from "@/lib/db";
 import { Card, Boton, Input, Field } from "@/components/ui";
+import { MoneyInput } from "@/components/MoneyInput";
 import { GestionUsuarios } from "@/components/GestionUsuarios";
 
 export default function Ajustes() {
@@ -14,12 +15,13 @@ export default function Ajustes() {
   const setConfig = useStore((s) => s.setConfig);
 
   const [whatsapp, setWhatsapp] = useState(config.whatsapp);
+  const [salario, setSalario] = useState(config.salarioMinimo);
   const [guardado, setGuardado] = useState(false);
 
   async function guardar() {
-    await setConfig({ whatsapp: whatsapp.trim() });
+    await setConfig({ whatsapp: whatsapp.trim(), salarioMinimo: salario });
     setGuardado(true);
-    avisar("WhatsApp del almacén guardado");
+    avisar("Configuración guardada");
     setTimeout(() => setGuardado(false), 2500);
   }
 
@@ -63,6 +65,12 @@ export default function Ajustes() {
             Se usará como: <span className="font-semibold text-stone-700">+{numeroFormateado}</span>
           </p>
         )}
+
+        <div className="mt-4">
+          <Field label="Salario mínimo mensual (para el descuento por retraso)">
+            <MoneyInput value={salario} onChange={setSalario} className="sm:w-56" />
+          </Field>
+        </div>
 
         <div className="mt-4 flex gap-2">
           <Boton onClick={guardar}>

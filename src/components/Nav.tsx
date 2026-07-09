@@ -2,13 +2,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
-import { LayoutDashboard, NotebookPen, Package, FileBarChart, Settings } from "lucide-react";
+import { LayoutDashboard, NotebookPen, Package, FileBarChart, Settings, Clock } from "lucide-react";
 import { useStore } from "@/lib/store";
 
 const items = [
   { href: "/", label: "Panel", corto: "Panel", icon: LayoutDashboard, soloAdmin: false },
   { href: "/dia", label: "Registro del día", corto: "Registro", icon: NotebookPen, soloAdmin: false },
   { href: "/apartados", label: "Apartados", corto: "Apartados", icon: Package, soloAdmin: false },
+  { href: "/nomina", label: "Nómina", corto: "Nómina", icon: Clock, soloAdmin: false },
   { href: "/reportes", label: "Reportes", corto: "Reportes", icon: FileBarChart, soloAdmin: true },
   { href: "/ajustes", label: "Ajustes", corto: "Ajustes", icon: Settings, soloAdmin: true },
 ];
@@ -20,6 +21,10 @@ export function Nav() {
   return (
     <nav className="flex gap-1 md:flex-col">
       {visibles.map(({ href, label, corto, icon: Icon }) => {
+        // El colaborador ve "Mi entrada" en vez de "Nómina"
+        const esEntradaEmpleado = href === "/nomina" && !esAdmin;
+        const etiqueta = esEntradaEmpleado ? "Mi entrada" : label;
+        const etiquetaCorta = esEntradaEmpleado ? "Entrada" : corto;
         const activo = path === href;
         return (
           <Link
@@ -31,8 +36,8 @@ export function Nav() {
             )}
           >
             <Icon className="h-5 w-5 shrink-0 md:h-4 md:w-4" />
-            <span className="md:hidden">{corto}</span>
-            <span className="hidden md:inline">{label}</span>
+            <span className="md:hidden">{etiquetaCorta}</span>
+            <span className="hidden md:inline">{etiqueta}</span>
           </Link>
         );
       })}

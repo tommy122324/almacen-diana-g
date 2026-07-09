@@ -364,6 +364,88 @@ $$;
 grant execute on function public.validar_codigo(uuid, text) to anon, authenticated;
 
 -- ============================================================
+-- FASE 7c — Registro de hora (entrada) + nómina
+-- ============================================================
+
+-- Salario mínimo mensual (base para el descuento por retraso)
+alter table public.configuracion add column if not exists salario_minimo bigint not null default 0;
+
+-- Vincular un gasto con el empleado al que se le pagó (nómina)
+alter table public.gastos add column if not exists empleado_id uuid references auth.users(id);
+
+-- Registro de entrada del empleado (una por día)
+create table if not exists public.registros_hora (
+  id            uuid primary key default gen_random_uuid(),
+  negocio_id    uuid not null references public.negocios(id) on delete cascade,
+  usuario_id    uuid not null references auth.users(id) on delete cascade,
+  fecha         date not null,
+  hora_entrada  timestamptz not null default now(),
+  minutos_tarde int not null default 0,
+  descuento     bigint not null default 0,
+  creado_en     timestamptz not null default now(),
+  unique (negocio_id, usuario_id, fecha)
+);
+create index if not exists idx_registros_hora_neg on public.registros_hora(negocio_id, fecha);
+
+alter table public.registros_hora enable row level security;
+-- El empleado ve solo lo suyo; el admin ve todo el negocio
+drop policy if exists rh_sel on public.registros_hora;
+create policy rh_sel on public.registros_hora for select
+  using (public.es_admin(negocio_id) or usuario_id = auth.uid());
+-- El insert real lo hace la función (security definer); esta política es de respaldo
+drop policy if exists rh_ins on public.registros_hora;
+create policy rh_ins on public.registros_hora for insert
+  with check (usuario_id = auth.uid() and public.es_miembro(negocio_id) and fecha = public.hoy_bogota());
+
+-- Registrar la entrada de hoy. Horario 9:00 am, tolerancia hasta 9:15.
+-- Después de las 9:15 se descuenta cada minuto según el salario mínimo
+-- (jornada 9am–9pm = 12 h, 30 días → salario / (30*12*60) por minuto).
+create or replace function public.registrar_entrada(p_negocio uuid)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  uid          uuid := auth.uid();
+  hoy          date := public.hoy_bogota();
+  ahora_local  timestamp := (now() at time zone 'America/Bogota');
+  limite       timestamp := date_trunc('day', ahora_local) + time '09:15';
+  mins         int := 0;
+  desc_val     bigint := 0;
+  sal          bigint := 0;
+  ya           public.registros_hora;
+begin
+  if uid is null or not public.es_miembro(p_negocio) then
+    return json_build_object('error', 'No autorizado');
+  end if;
+
+  select * into ya from public.registros_hora
+    where negocio_id = p_negocio and usuario_id = uid and fecha = hoy;
+  if found then
+    return json_build_object(
+      'error', 'Ya registraste tu entrada hoy',
+      'minutosTarde', ya.minutos_tarde,
+      'descuento', ya.descuento,
+      'hora', to_char(ya.hora_entrada at time zone 'America/Bogota', 'HH12:MI AM')
+    );
+  end if;
+
+  if ahora_local > limite then
+    mins := ceil(extract(epoch from (ahora_local - limite)) / 60.0)::int;
+    select coalesce(salario_minimo, 0) into sal from public.configuracion where negocio_id = p_negocio;
+    desc_val := round(coalesce(sal, 0)::numeric / (30 * 12 * 60) * mins)::bigint;
+  end if;
+
+  insert into public.registros_hora (negocio_id, usuario_id, fecha, hora_entrada, minutos_tarde, descuento)
+    values (p_negocio, uid, hoy, now(), mins, desc_val);
+
+  return json_build_object(
+    'minutosTarde', mins,
+    'descuento', desc_val,
+    'hora', to_char(ahora_local, 'HH12:MI AM')
+  );
+end;
+$$;
+grant execute on function public.registrar_entrada(uuid) to authenticated;
+
+-- ============================================================
 -- Permisos para el rol de la app (la seguridad real la pone RLS)
 -- ============================================================
 grant usage on schema public to anon, authenticated;

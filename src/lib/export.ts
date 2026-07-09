@@ -2,7 +2,7 @@
 // Las librerías pesadas (exceljs, jspdf) se cargan SOLO al exportar (import dinámico),
 // para que la app inicie más liviana y rápida.
 import { METODOS, METODO_LABEL } from "./types";
-import type { Venta, Gasto, Entrada, Apartado } from "./types";
+import type { Venta, Gasto, Entrada, Apartado, RegistroHora } from "./types";
 import type { Resumen, Periodo } from "./calc";
 import { variacion } from "./calc";
 import { formatCOP, formatFechaCorta } from "./format";
@@ -161,6 +161,54 @@ export async function exportarPDF(d: DatosReporte) {
 
 function abonadoLocal(a: Apartado): number {
   return a.abonos.reduce((s, ab) => s + ab.monto, 0);
+}
+
+/** PDF de nómina de un empleado: entradas/retrasos + pagos del mes. */
+export async function exportarNominaPDF(d: {
+  negocio: string;
+  empleado: string;
+  mesLabel: string;
+  registros: RegistroHora[];
+  pagos: Gasto[];
+}) {
+  const { default: jsPDF } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
+  const doc = new jsPDF();
+  const M = 14;
+  doc.setFontSize(16);
+  doc.text(`Nómina — ${d.empleado}`, M, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text(`${d.negocio} · ${d.mesLabel}`, M, 25);
+  doc.setTextColor(0);
+
+  const totalDesc = d.registros.reduce((s, r) => s + r.descuento, 0);
+  const totalPagos = d.pagos.reduce((s, p) => s + p.monto, 0);
+
+  autoTable(doc, {
+    startY: 31,
+    head: [["Fecha", "Entrada", "Min. tarde", "Descuento"]],
+    body: d.registros.map((r) => [formatFechaCorta(r.fecha), r.hora, r.minutosTarde || "-", r.descuento ? formatCOP(r.descuento) : "-"]),
+    foot: [["", "", "Total descuentos", formatCOP(totalDesc)]],
+    theme: "striped",
+    headStyles: { fillColor: [217, 119, 6] },
+    footStyles: { fillColor: [254, 243, 199], textColor: 0, fontStyle: "bold" },
+    margin: { left: M, right: M },
+  });
+
+  const y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  autoTable(doc, {
+    startY: y,
+    head: [["Fecha", "Concepto", "Pagado"]],
+    body: d.pagos.map((p) => [formatFechaCorta(p.fecha), p.concepto, formatCOP(p.monto)]),
+    foot: [["", "Total pagado", formatCOP(totalPagos)]],
+    theme: "grid",
+    headStyles: { fillColor: [16, 185, 129] },
+    footStyles: { fillColor: [209, 250, 229], textColor: 0, fontStyle: "bold" },
+    margin: { left: M, right: M },
+  });
+
+  doc.save(`Nomina_${d.empleado.replace(/[^\w]+/g, "_")}_${d.mesLabel.replace(/[^\w]+/g, "_")}.pdf`);
 }
 
 /** PDF con la lista de pedidos. */

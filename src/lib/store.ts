@@ -123,7 +123,7 @@ export const useStore = create<State>()((set, get) => ({
   apartados: [],
   metas: [],
   cuadres: [],
-  config: { whatsapp: "", correoCodigos: "" },
+  config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 },
   miRol: "",
   esAdmin: false,
   setConfig: (patch) =>
@@ -164,7 +164,7 @@ export const useStore = create<State>()((set, get) => ({
   },
 
   limpiar: () =>
-    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [], config: { whatsapp: "", correoCodigos: "" }, miRol: "", esAdmin: false }),
+    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [], config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 }, miRol: "", esAdmin: false }),
 
   crearNegocio: async (nombre) => {
     try {

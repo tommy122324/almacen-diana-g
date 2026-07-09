@@ -14,6 +14,7 @@ import type {
   Meta,
   Cuadre,
   Configuracion,
+  RegistroHora,
   MetodoPago,
   TipoApartado,
   EstadoApartado,
@@ -282,7 +283,7 @@ export async function upsertMeta(m: { negocioId: string; anio: number; mes: numb
 export async function cargarConfig(negocioId: string): Promise<Configuracion> {
   const { data, error } = await db().from("configuracion").select("*").eq("negocio_id", negocioId).maybeSingle();
   if (error) throw error;
-  return { whatsapp: s(data?.whatsapp), correoCodigos: s(data?.correo_codigos) };
+  return { whatsapp: s(data?.whatsapp), correoCodigos: s(data?.correo_codigos), salarioMinimo: n(data?.salario_minimo) };
 }
 
 export async function guardarConfig(negocioId: string, patch: Partial<Configuracion>): Promise<Configuracion> {
@@ -291,11 +292,91 @@ export async function guardarConfig(negocioId: string, patch: Partial<Configurac
     negocio_id: negocioId,
     whatsapp: patch.whatsapp ?? actual.whatsapp,
     correo_codigos: patch.correoCodigos ?? actual.correoCodigos,
+    salario_minimo: patch.salarioMinimo ?? actual.salarioMinimo,
     actualizado_en: new Date().toISOString(),
   };
   const { data, error } = await db().from("configuracion").upsert(fila, { onConflict: "negocio_id" }).select().single();
   if (error) throw error;
-  return { whatsapp: s(data.whatsapp), correoCodigos: s(data.correo_codigos) };
+  return { whatsapp: s(data.whatsapp), correoCodigos: s(data.correo_codigos), salarioMinimo: n(data.salario_minimo) };
+}
+
+// ---------- Nómina / Registro de hora (Fase 7c) ----------
+
+/** El empleado registra su entrada (hora del servidor, Bogotá). */
+export async function registrarEntrada(negocioId: string): Promise<{ minutosTarde: number; descuento: number; hora: string; error?: string }> {
+  const { data, error } = await db().rpc("registrar_entrada", { p_negocio: negocioId });
+  if (error) throw error;
+  return data as { minutosTarde: number; descuento: number; hora: string; error?: string };
+}
+
+function mRegistroHora(r: Row): RegistroHora {
+  return {
+    id: s(r.id),
+    usuarioId: s(r.usuario_id),
+    fecha: s(r.fecha),
+    hora: new Date(s(r.hora_entrada)).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit", timeZone: "America/Bogota" }),
+    minutosTarde: n(r.minutos_tarde),
+    descuento: n(r.descuento),
+  };
+}
+
+/** Registro de hora del usuario actual para hoy (o null). */
+export async function miRegistroHoy(negocioId: string): Promise<RegistroHora | null> {
+  const c = db();
+  const { data: u } = await c.auth.getUser();
+  const uid = u.user?.id;
+  if (!uid) return null;
+  const { data } = await c
+    .from("registros_hora")
+    .select("*")
+    .eq("negocio_id", negocioId)
+    .eq("usuario_id", uid)
+    .order("fecha", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+  const hoy = new Date().toLocaleDateString("sv", { timeZone: "America/Bogota" });
+  return s(data.fecha) === hoy ? mRegistroHora(data) : null;
+}
+
+/** (Admin) Registros de hora de un empleado en un rango de fechas. */
+export async function cargarRegistrosHora(negocioId: string, usuarioId: string, desde: string, hasta: string): Promise<RegistroHora[]> {
+  const { data, error } = await db()
+    .from("registros_hora")
+    .select("*")
+    .eq("negocio_id", negocioId)
+    .eq("usuario_id", usuarioId)
+    .gte("fecha", desde)
+    .lte("fecha", hasta)
+    .order("fecha");
+  if (error) throw error;
+  return (data ?? []).map(mRegistroHora);
+}
+
+/** (Admin) Registra un pago/abono a un empleado → se guarda como gasto. */
+export async function insertPagoEmpleado(p: { negocioId: string; empleadoId: string; concepto: string; monto: number; fecha: string }): Promise<void> {
+  const { error } = await db().from("gastos").insert({
+    negocio_id: p.negocioId,
+    fecha: p.fecha,
+    concepto: p.concepto,
+    monto: p.monto,
+    empleado_id: p.empleadoId,
+  });
+  if (error) throw error;
+}
+
+/** (Admin) Pagos hechos a un empleado (gastos con empleado_id) en un rango. */
+export async function cargarPagosEmpleado(negocioId: string, empleadoId: string, desde: string, hasta: string): Promise<Gasto[]> {
+  const { data, error } = await db()
+    .from("gastos")
+    .select("*")
+    .eq("negocio_id", negocioId)
+    .eq("empleado_id", empleadoId)
+    .gte("fecha", desde)
+    .lte("fecha", hasta)
+    .order("fecha");
+  if (error) throw error;
+  return (data ?? []).map(mGasto);
 }
 
 // ---------- Códigos de acceso (Fase 7b) ----------
