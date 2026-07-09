@@ -1,20 +1,24 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Clock, CheckCircle2, AlertTriangle, FileText, User, DollarSign, Ban, RotateCcw, Timer } from "lucide-react";
+import { Clock, CheckCircle2, AlertTriangle, FileText, User, DollarSign, Ban, RotateCcw, Timer, Trash2, Pencil, Check, X } from "lucide-react";
 import { useStore } from "@/lib/store";
 import {
   registrarEntrada,
   miRegistroHoy,
+  entradaBloqueadaHoy,
   cargarRegistrosHora,
   cargarPagosEmpleado,
   insertPagoEmpleado,
+  updatePagoEmpleado,
   cargarMiembros,
   marcarEntradaATiempo,
   anularEntrada,
+  eliminarEntradaRegistro,
+  deleteGasto,
   type Miembro,
 } from "@/lib/db";
 import type { RegistroHora, Gasto } from "@/lib/types";
-import { avisar, avisarError, confirmar } from "@/lib/alerta";
+import { avisar, avisarError, confirmar, confirmarEliminar } from "@/lib/alerta";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { exportarNominaPDF } from "@/lib/export";
 import { Card, Boton, Input, StatCard, Select, Chip } from "@/components/ui";
@@ -31,13 +35,16 @@ function MiEntrada() {
   const negocioId = useStore((s) => s.negocioActivoId);
   const revision = useStore((s) => s.revision);
   const [registro, setRegistro] = useState<RegistroHora | null>(null);
+  const [bloqueado, setBloqueado] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [registrando, setRegistrando] = useState(false);
 
   const cargar = useCallback(async () => {
     if (!negocioId) return;
     try {
-      setRegistro(await miRegistroHoy(negocioId));
+      const [reg, bloq] = await Promise.all([miRegistroHoy(negocioId), entradaBloqueadaHoy(negocioId)]);
+      setRegistro(reg);
+      setBloqueado(bloq);
     } catch {
       /* noop */
     } finally {
@@ -94,6 +101,20 @@ function MiEntrada() {
               ¡Llegaste a tiempo! Sin descuentos. 🎉
             </div>
           )}
+        </Card>
+      ) : bloqueado ? (
+        <Card>
+          <div className="flex items-center gap-3 text-stone-600">
+            <CheckCircle2 className="h-8 w-8 text-stone-400" />
+            <div>
+              <div className="font-semibold">Ya registraste tu entrada hoy</div>
+              <div className="text-sm text-stone-500">
+                {registro?.anulada
+                  ? "El administrador anuló tu registro de hoy. Podrás registrar de nuevo mañana."
+                  : "Podrás registrar de nuevo mañana."}
+              </div>
+            </div>
+          </div>
         </Card>
       ) : (
         <Card className="text-center">
@@ -222,6 +243,42 @@ function NominaAdmin() {
       avisarError("No se pudo actualizar");
     }
   }
+  async function eliminarReg(r: RegistroHora) {
+    if (!(await confirmarEliminar("Se borrará este registro de entrada. El empleado seguirá sin poder registrar de nuevo hoy."))) return;
+    try {
+      await eliminarEntradaRegistro(r.id);
+      avisar("Registro eliminado");
+      await cargarDetalle();
+    } catch {
+      avisarError("No se pudo eliminar");
+    }
+  }
+  async function eliminarPago(p: Gasto) {
+    if (!(await confirmarEliminar("Se eliminará este pago (también se quita de los gastos del almacén)."))) return;
+    try {
+      await deleteGasto(p.id);
+      avisar("Pago eliminado");
+      await cargarDetalle();
+    } catch {
+      avisarError("No se pudo eliminar");
+    }
+  }
+  async function guardarEdicionPago(p: Gasto, nConcepto: string, nMonto: number, nFirma: string): Promise<boolean> {
+    if (nMonto <= 0) return false;
+    if (!nFirma) {
+      avisarError("Falta la firma nueva del empleado para guardar el cambio.");
+      return false;
+    }
+    try {
+      await updatePagoEmpleado(p.id, { concepto: nConcepto.trim() || p.concepto, monto: nMonto, firma: nFirma });
+      avisar("Pago actualizado");
+      await cargarDetalle();
+      return true;
+    } catch {
+      avisarError("No se pudo actualizar");
+      return false;
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -291,6 +348,9 @@ function NominaAdmin() {
                       <button onClick={() => togglAnular(r)} title={r.anulada ? "Restaurar" : "Anular"} className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-stone-500 hover:bg-stone-100">
                         {r.anulada ? <><RotateCcw className="h-3.5 w-3.5" /> Restaurar</> : <><Ban className="h-3.5 w-3.5" /> Anular</>}
                       </button>
+                      <button onClick={() => eliminarReg(r)} title="Eliminar registro" className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-stone-400 hover:bg-rose-50 hover:text-rose-500">
+                        <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -321,19 +381,7 @@ function NominaAdmin() {
             <div className="mt-4 space-y-1 border-t border-stone-100 pt-3">
               {pagos.length === 0 && <p className="px-1 text-sm text-stone-400">Sin pagos este mes.</p>}
               {pagos.map((p) => (
-                <div key={p.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-stone-50">
-                  <span className="text-stone-400">{formatFechaCorta(p.fecha)}</span>
-                  <span className="flex-1">{p.concepto}</span>
-                  {p.firma ? (
-                    <a href={p.firma} target="_blank" rel="noreferrer" title="Ver firma">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={p.firma} alt="firma" className="h-7 w-16 rounded border border-stone-200 object-contain" />
-                    </a>
-                  ) : (
-                    <span className="text-xs text-stone-300">sin firma</span>
-                  )}
-                  <span className="tabular-nums font-medium text-emerald-600">{formatCOP(p.monto)}</span>
-                </div>
+                <FilaPago key={p.id} pago={p} onEliminar={() => eliminarPago(p)} onGuardar={(c, m, f) => guardarEdicionPago(p, c, m, f)} />
               ))}
             </div>
           </Card>
@@ -344,6 +392,67 @@ function NominaAdmin() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/** Fila de un pago de nómina: ver firma, editar (pide firma de nuevo) o eliminar. */
+function FilaPago({
+  pago,
+  onEliminar,
+  onGuardar,
+}: {
+  pago: Gasto;
+  onEliminar: () => void;
+  onGuardar: (concepto: string, monto: number, firma: string) => Promise<boolean>;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [concepto, setConcepto] = useState(pago.concepto);
+  const [monto, setMonto] = useState(pago.monto);
+  const [firma, setFirma] = useState("");
+
+  if (editando) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input value={concepto} onChange={(e) => setConcepto(e.target.value)} className="flex-1" />
+          <MoneyInput value={monto} onChange={setMonto} className="sm:w-40" />
+        </div>
+        <div className="mt-2">
+          <span className="mb-1 block text-xs font-medium text-stone-500">Firma nueva del empleado (obligatoria para editar)</span>
+          <FirmaPad onChange={setFirma} />
+        </div>
+        <div className="mt-2 flex gap-2">
+          <Boton onClick={async () => { if (await onGuardar(concepto, monto, firma)) setEditando(false); }}>
+            <Check className="h-4 w-4" /> Guardar
+          </Boton>
+          <Boton variant="ghost" onClick={() => { setConcepto(pago.concepto); setMonto(pago.monto); setFirma(""); setEditando(false); }}>
+            <X className="h-4 w-4" /> Cancelar
+          </Boton>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-stone-50">
+      <span className="text-stone-400">{formatFechaCorta(pago.fecha)}</span>
+      <span className="flex-1">{pago.concepto}</span>
+      {pago.firma ? (
+        <a href={pago.firma} target="_blank" rel="noreferrer" title="Ver firma">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={pago.firma} alt="firma" className="h-7 w-16 rounded border border-stone-200 object-contain" />
+        </a>
+      ) : (
+        <span className="text-xs text-stone-300">sin firma</span>
+      )}
+      <span className="tabular-nums font-medium text-emerald-600">{formatCOP(pago.monto)}</span>
+      <button onClick={() => setEditando(true)} className="text-stone-300 hover:text-amber-600" title="Editar">
+        <Pencil className="h-4 w-4" />
+      </button>
+      <button onClick={onEliminar} className="text-stone-300 hover:text-rose-500" title="Eliminar">
+        <Trash2 className="h-4 w-4" />
+      </button>
     </div>
   );
 }

@@ -2,13 +2,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
-import { LayoutDashboard, NotebookPen, Package, FileBarChart, Settings, Clock } from "lucide-react";
+import { LayoutDashboard, NotebookPen, Package, FileBarChart, Settings, Clock, ListChecks } from "lucide-react";
 import { useStore } from "@/lib/store";
 
 const items = [
   { href: "/", label: "Panel", corto: "Panel", icon: LayoutDashboard, soloAdmin: false },
   { href: "/dia", label: "Registro del día", corto: "Registro", icon: NotebookPen, soloAdmin: false },
   { href: "/apartados", label: "Apartados", corto: "Apartados", icon: Package, soloAdmin: false },
+  { href: "/tareas", label: "Tareas", corto: "Tareas", icon: ListChecks, soloAdmin: false },
   { href: "/nomina", label: "Nómina", corto: "Nómina", icon: Clock, soloAdmin: false },
   { href: "/reportes", label: "Reportes", corto: "Reportes", icon: FileBarChart, soloAdmin: true },
   { href: "/ajustes", label: "Ajustes", corto: "Ajustes", icon: Settings, soloAdmin: true },
@@ -21,10 +22,11 @@ export function Nav() {
   return (
     <nav className="flex gap-1 md:flex-col">
       {visibles.map(({ href, label, corto, icon: Icon }) => {
-        // El colaborador ve "Mi entrada" en vez de "Nómina"
-        const esEntradaEmpleado = href === "/nomina" && !esAdmin;
-        const etiqueta = esEntradaEmpleado ? "Mi entrada" : label;
-        const etiquetaCorta = esEntradaEmpleado ? "Entrada" : corto;
+        // El colaborador ve nombres en primera persona
+        let etiqueta = label;
+        let etiquetaCorta = corto;
+        if (!esAdmin && href === "/nomina") { etiqueta = "Mi entrada"; etiquetaCorta = "Entrada"; }
+        if (!esAdmin && href === "/tareas") { etiqueta = "Mis tareas"; etiquetaCorta = "Tareas"; }
         const activo = path === href;
         return (
           <Link

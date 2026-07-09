@@ -15,6 +15,7 @@ import type {
   Cuadre,
   Configuracion,
   RegistroHora,
+  Tarea,
   MetodoPago,
   TipoApartado,
   EstadoApartado,
@@ -342,6 +343,35 @@ export async function anularEntrada(id: string, anulada: boolean): Promise<void>
   if (error) throw error;
 }
 
+/** (Admin) Elimina el registro visible de una entrada. El candado del día sigue vigente. */
+export async function eliminarEntradaRegistro(id: string): Promise<void> {
+  const { error } = await db().from("registros_hora").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/** ¿El usuario actual ya registró su entrada hoy? (candado inmutable, aunque el admin la borre) */
+export async function entradaBloqueadaHoy(negocioId: string): Promise<boolean> {
+  const c = db();
+  const { data: u } = await c.auth.getUser();
+  const uid = u.user?.id;
+  if (!uid) return false;
+  const hoy = new Date().toLocaleDateString("sv", { timeZone: "America/Bogota" });
+  const { data } = await c
+    .from("entradas_lock")
+    .select("fecha")
+    .eq("negocio_id", negocioId)
+    .eq("usuario_id", uid)
+    .eq("fecha", hoy)
+    .maybeSingle();
+  return !!data;
+}
+
+/** (Admin) Edita un pago de nómina. Se exige firma nueva (constancia legal). */
+export async function updatePagoEmpleado(id: string, patch: { concepto: string; monto: number; firma: string }): Promise<void> {
+  const { error } = await db().from("gastos").update({ concepto: patch.concepto, monto: patch.monto, firma: patch.firma }).eq("id", id);
+  if (error) throw error;
+}
+
 /** Registro de hora del usuario actual para hoy (o null). */
 export async function miRegistroHoy(negocioId: string): Promise<RegistroHora | null> {
   const c = db();
@@ -400,6 +430,80 @@ export async function cargarPagosEmpleado(negocioId: string, empleadoId: string,
     .order("fecha");
   if (error) throw error;
   return (data ?? []).map(mGasto);
+}
+
+// ---------- Tareas / notas para colaboradores (Fase 7e) ----------
+function mTarea(r: Row): Tarea {
+  return {
+    id: s(r.id),
+    negocioId: s(r.negocio_id),
+    usuarioId: s(r.usuario_id),
+    fecha: s(r.fecha),
+    descripcion: s(r.descripcion),
+    progreso: n(r.progreso),
+    completada: Boolean(r.completada),
+    creadoEn: s(r.creado_en),
+  };
+}
+
+/** (Admin) Tareas asignadas a un empleado en una fecha. */
+export async function cargarTareas(negocioId: string, usuarioId: string, fecha: string): Promise<Tarea[]> {
+  const { data, error } = await db()
+    .from("tareas")
+    .select("*")
+    .eq("negocio_id", negocioId)
+    .eq("usuario_id", usuarioId)
+    .eq("fecha", fecha)
+    .order("creado_en");
+  if (error) throw error;
+  return (data ?? []).map(mTarea);
+}
+
+/** (Empleado) Mis tareas de hoy. */
+export async function misTareasHoy(negocioId: string): Promise<Tarea[]> {
+  const c = db();
+  const { data: u } = await c.auth.getUser();
+  const uid = u.user?.id;
+  if (!uid) return [];
+  const hoy = new Date().toLocaleDateString("sv", { timeZone: "America/Bogota" });
+  const { data, error } = await c
+    .from("tareas")
+    .select("*")
+    .eq("negocio_id", negocioId)
+    .eq("usuario_id", uid)
+    .eq("fecha", hoy)
+    .order("creado_en");
+  if (error) throw error;
+  return (data ?? []).map(mTarea);
+}
+
+/** (Admin) Crea una tarea para un empleado. */
+export async function insertTarea(p: { negocioId: string; usuarioId: string; fecha: string; descripcion: string }): Promise<Tarea> {
+  const { data, error } = await db()
+    .from("tareas")
+    .insert({ negocio_id: p.negocioId, usuario_id: p.usuarioId, fecha: p.fecha, descripcion: p.descripcion })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return mTarea(data);
+}
+
+/** (Admin) Edita el texto de una tarea. */
+export async function updateTareaTexto(id: string, descripcion: string): Promise<void> {
+  const { error } = await db().from("tareas").update({ descripcion }).eq("id", id);
+  if (error) throw error;
+}
+
+/** (Empleado o admin) Actualiza el avance / completada de una tarea. */
+export async function updateTareaProgreso(id: string, progreso: number, completada: boolean): Promise<void> {
+  const { error } = await db().from("tareas").update({ progreso, completada }).eq("id", id);
+  if (error) throw error;
+}
+
+/** (Admin) Elimina una tarea. */
+export async function deleteTarea(id: string): Promise<void> {
+  const { error } = await db().from("tareas").delete().eq("id", id);
+  if (error) throw error;
 }
 
 // ---------- Códigos de acceso (Fase 7b) ----------

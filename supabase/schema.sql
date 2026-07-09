@@ -479,6 +479,100 @@ begin
 end $$;
 
 -- ============================================================
+-- FASE 7e — Candado de entrada · eliminar entrada · tareas para colaboradores
+-- ============================================================
+
+-- Candado inmutable: registra que un empleado ya marcó entrada un día.
+-- No tiene políticas de UPDATE/DELETE, así el registro del día no se puede
+-- "reabrir" aunque el admin borre o anule la entrada visible.
+create table if not exists public.entradas_lock (
+  negocio_id  uuid not null references public.negocios(id) on delete cascade,
+  usuario_id  uuid not null references auth.users(id) on delete cascade,
+  fecha       date not null,
+  creado_en   timestamptz not null default now(),
+  primary key (negocio_id, usuario_id, fecha)
+);
+alter table public.entradas_lock enable row level security;
+drop policy if exists elock_sel on public.entradas_lock;
+create policy elock_sel on public.entradas_lock for select
+  using (public.es_admin(negocio_id) or usuario_id = auth.uid());
+-- Rellenar el candado con las entradas que ya existían
+insert into public.entradas_lock (negocio_id, usuario_id, fecha)
+  select negocio_id, usuario_id, fecha from public.registros_hora
+  on conflict do nothing;
+
+-- El admin puede borrar el registro visible de una entrada (el candado queda)
+drop policy if exists rh_del on public.registros_hora;
+create policy rh_del on public.registros_hora for delete using (public.es_admin(negocio_id));
+
+-- Registrar entrada v2: usa el candado inmutable.
+create or replace function public.registrar_entrada(p_negocio uuid)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  uid          uuid := auth.uid();
+  hoy          date := public.hoy_bogota();
+  ahora_local  timestamp := (now() at time zone 'America/Bogota');
+  limite       timestamp := date_trunc('day', ahora_local) + time '09:15';
+  mins         int := 0;
+  desc_val     bigint := 0;
+  sal          bigint := 0;
+begin
+  if uid is null or not public.es_miembro(p_negocio) then
+    return json_build_object('error', 'No autorizado');
+  end if;
+
+  if exists (select 1 from public.entradas_lock where negocio_id = p_negocio and usuario_id = uid and fecha = hoy) then
+    return json_build_object('error', 'Ya registraste tu entrada hoy');
+  end if;
+
+  if ahora_local > limite then
+    mins := ceil(extract(epoch from (ahora_local - limite)) / 60.0)::int;
+    select coalesce(salario_minimo, 0) into sal from public.configuracion where negocio_id = p_negocio;
+    desc_val := round(coalesce(sal, 0)::numeric / (30 * 12 * 60) * mins)::bigint;
+  end if;
+
+  insert into public.entradas_lock (negocio_id, usuario_id, fecha) values (p_negocio, uid, hoy);
+  insert into public.registros_hora (negocio_id, usuario_id, fecha, hora_entrada, minutos_tarde, descuento)
+    values (p_negocio, uid, hoy, now(), mins, desc_val);
+
+  return json_build_object('minutosTarde', mins, 'descuento', desc_val, 'hora', to_char(ahora_local, 'HH12:MI AM'));
+end;
+$$;
+
+-- Tareas / notas que el admin asigna a cada colaborador
+create table if not exists public.tareas (
+  id           uuid primary key default gen_random_uuid(),
+  negocio_id   uuid not null references public.negocios(id) on delete cascade,
+  usuario_id   uuid not null references auth.users(id) on delete cascade,
+  fecha        date not null,
+  descripcion  text not null,
+  progreso     int not null default 0 check (progreso between 0 and 100),
+  completada   boolean not null default false,
+  creado_por   uuid references auth.users(id),
+  creado_en    timestamptz not null default now()
+);
+create index if not exists idx_tareas_neg on public.tareas(negocio_id, usuario_id, fecha);
+alter table public.tareas enable row level security;
+-- Admin: CRUD completo. Empleado: ve y actualiza (avance) solo las suyas de HOY.
+drop policy if exists tareas_admin on public.tareas;
+create policy tareas_admin on public.tareas for all
+  using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
+drop policy if exists tareas_emp_sel on public.tareas;
+create policy tareas_emp_sel on public.tareas for select
+  using (usuario_id = auth.uid() and fecha = public.hoy_bogota());
+drop policy if exists tareas_emp_upd on public.tareas;
+create policy tareas_emp_upd on public.tareas for update
+  using (usuario_id = auth.uid() and fecha = public.hoy_bogota())
+  with check (usuario_id = auth.uid() and fecha = public.hoy_bogota());
+
+-- Realtime para las tareas (sincronía admin ↔ empleado)
+do $$ begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'tareas') then
+    alter publication supabase_realtime add table public.tareas;
+  end if;
+end $$;
+
+-- ============================================================
 -- Permisos para el rol de la app (la seguridad real la pone RLS)
 -- ============================================================
 grant usage on schema public to anon, authenticated;

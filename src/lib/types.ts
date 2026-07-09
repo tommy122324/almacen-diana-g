@@ -115,6 +115,17 @@ export interface RegistroHora {
   anulada?: boolean; // el admin la anuló (sigue bloqueando el reintento del día)
 }
 
+export interface Tarea {
+  id: string;
+  negocioId: string;
+  usuarioId: string; // empleado asignado
+  fecha: string;
+  descripcion: string;
+  progreso: number; // 0-100
+  completada: boolean;
+  creadoEn: string;
+}
+
 export interface Cuadre {
   id: string;
   negocioId: string;
