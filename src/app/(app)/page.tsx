@@ -35,7 +35,10 @@ const OPCIONES: { tipo: TipoPeriodo; label: string }[] = [
 ];
 
 export default function Panel() {
-  const tipo = useStore((s) => s.panelTipo);
+  const esAdmin = useStore((s) => s.esAdmin);
+  const panelTipo = useStore((s) => s.panelTipo);
+  // El colaborador solo ve HOY; el admin puede elegir el periodo.
+  const tipo = esAdmin ? panelTipo : "dia";
   const rangoDesde = useStore((s) => s.panelDesde);
   const rangoHasta = useStore((s) => s.panelHasta);
   const setPanelPeriodo = useStore((s) => s.setPanelPeriodo);
@@ -140,17 +143,21 @@ export default function Panel() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-stone-800">Panel</h1>
-        <div className="flex gap-1 rounded-xl border border-stone-200 bg-white p-1 shadow-sm">
-          {OPCIONES.map((o) => (
-            <button
-              key={o.tipo}
-              onClick={() => setPanelPeriodo({ tipo: o.tipo })}
-              className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${tipo === o.tipo ? "bg-amber-500 text-white shadow-sm" : "text-stone-500 hover:bg-stone-100"}`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
+        {esAdmin ? (
+          <div className="flex gap-1 rounded-xl border border-stone-200 bg-white p-1 shadow-sm">
+            {OPCIONES.map((o) => (
+              <button
+                key={o.tipo}
+                onClick={() => setPanelPeriodo({ tipo: o.tipo })}
+                className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold transition ${tipo === o.tipo ? "bg-amber-500 text-white shadow-sm" : "text-stone-500 hover:bg-stone-100"}`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <span className="rounded-xl bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-800">Hoy</span>
+        )}
       </div>
 
       {/* Rango de fechas personalizado */}
@@ -179,12 +186,14 @@ export default function Panel() {
           tone={datos.r.utilidad >= 0 ? "amber" : "red"}
           hint={pctHint(datos.r.utilidad, datos.rp.utilidad)}
         />
-        <StatCard
-          label="Efectivo neto total"
-          value={datos.efectivo.efectivoNeto}
-          tone={datos.efectivo.efectivoNeto >= 0 ? "green" : "red"}
-          hint={`(esperado en efectivo: ${formatCOP(datos.efectivo.esperadoEfectivo)})`}
-        />
+        {esAdmin && (
+          <StatCard
+            label="Efectivo neto total"
+            value={datos.efectivo.efectivoNeto}
+            tone={datos.efectivo.efectivoNeto >= 0 ? "green" : "red"}
+            hint={`(esperado en efectivo: ${formatCOP(datos.efectivo.esperadoEfectivo)})`}
+          />
+        )}
         <StatCard label="Abonos de apartados" value={datos.r.totalAbonos} tone="default" />
       </div>
 
@@ -205,6 +214,7 @@ export default function Panel() {
 
       {/* Meta y apartados */}
       <div className="grid gap-3 md:grid-cols-2">
+        {esAdmin && (
         <Card>
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2 font-semibold text-stone-800">
@@ -236,6 +246,7 @@ export default function Panel() {
             <p className="text-sm text-stone-400">Aún no has definido una meta para este mes.</p>
           )}
         </Card>
+        )}
 
         <Card>
           <div className="mb-3 flex items-center justify-between">
@@ -277,8 +288,8 @@ export default function Panel() {
         </Card>
       </div>
 
-      {/* Comparativo interactivo */}
-      <ComparativoCard />
+      {/* Comparativo interactivo (solo admin) */}
+      {esAdmin && <ComparativoCard />}
     </div>
   );
 }
