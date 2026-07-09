@@ -115,6 +115,16 @@ export interface RegistroHora {
   anulada?: boolean; // el admin la anuló (sigue bloqueando el reintento del día)
 }
 
+/** Operación pendiente de subir a la nube (cola offline). */
+export interface OpPendiente {
+  opId: string;
+  tabla: string;
+  tipo: "insert" | "update" | "delete" | "upsert";
+  payload: Record<string, unknown>; // fila (insert/upsert) o { id, patch } (update) o { id } (delete)
+  onConflict?: string;
+  creadoEn: number;
+}
+
 export interface Tarea {
   id: string;
   negocioId: string;

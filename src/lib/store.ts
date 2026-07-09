@@ -13,11 +13,13 @@ import type {
   Gasto,
   Entrada,
   Apartado,
+  Abono,
   Meta,
   Cuadre,
   Configuracion,
   MetodoPago,
   TipoApartado,
+  OpPendiente,
 } from "./types";
 import { periodoDe, type TipoPeriodo } from "./calc";
 
@@ -77,6 +79,12 @@ interface State {
   cargandoRango: boolean;
   asegurarRango: (desde: string, hasta: string) => Promise<void>;
 
+  // Cola offline: operaciones pendientes de subir a la nube.
+  pendientes: OpPendiente[];
+  sincronizando: boolean;
+  encolar: (op: Omit<OpPendiente, "opId" | "creadoEn">) => void;
+  sincronizarPendientes: () => Promise<void>;
+
   cargarDesdeSupabase: () => Promise<void>;
   limpiar: () => void;
 
@@ -119,6 +127,16 @@ interface State {
 // Cola para que las peticiones de rango no compitan entre sí (Panel, comparativo, etc.).
 let colaRango: Promise<void> = Promise.resolve();
 
+/** Genera un id único en el dispositivo (para que la nube nunca duplique un registro). */
+function uuid(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
+}
+
+function estaEnLinea(): boolean {
+  return typeof navigator === "undefined" || navigator.onLine !== false;
+}
+
 async function conError(fn: () => Promise<void>) {
   try {
     await fn();
@@ -148,9 +166,40 @@ export const useStore = create<State>()(
   movDesde: periodoDe("mes").desde,
   movHasta: periodoDe("mes").hasta,
   cargandoRango: false,
+  pendientes: [],
+  sincronizando: false,
+  encolar: (op) => {
+    const completa: OpPendiente = { ...op, opId: uuid(), creadoEn: Date.now() };
+    set((s) => ({ pendientes: [...s.pendientes, completa] }));
+    if (estaEnLinea()) get().sincronizarPendientes();
+  },
+  sincronizarPendientes: async () => {
+    if (get().sincronizando || !estaEnLinea()) return;
+    if (get().pendientes.length === 0) return;
+    set({ sincronizando: true });
+    try {
+      // Procesa en orden; si una falla (red), se detiene y se reintenta luego.
+      while (get().pendientes.length > 0) {
+        const op = get().pendientes[0];
+        try {
+          await db.ejecutarOperacion(op);
+        } catch (e) {
+          console.error("Operación pendiente falló, se reintentará luego", e);
+          break;
+        }
+        set((s) => ({ pendientes: s.pendientes.filter((p) => p.opId !== op.opId) }));
+      }
+    } finally {
+      set({ sincronizando: false });
+    }
+    // Al terminar de subir, refresca desde la nube para quedar en sincronía.
+    if (get().pendientes.length === 0) get().refrescarRemoto();
+  },
   refrescarRemoto: async () => {
     const { negocioActivoId, movDesde, movHasta } = get();
     if (!negocioActivoId) return;
+    // No pisar cambios locales que aún no se han subido.
+    if (get().pendientes.length > 0) return;
     try {
       const [base, mov, config] = await Promise.all([
         db.cargarBase(negocioActivoId),
@@ -263,151 +312,153 @@ export const useStore = create<State>()(
     }
   },
 
-  // ---------- Ventas ----------
-  agregarVenta: (fecha, metodo, monto) =>
-    conError(async () => {
-      const negocioId = get().negocioActivoId;
-      if (!negocioId || monto <= 0) return;
-      const v = await db.insertVenta({ negocioId, fecha, metodo, monto });
-      set((s) => ({ ventas: [...s.ventas, v] }));
-    }),
-  editarVenta: (id, metodo, monto) =>
-    conError(async () => {
-      if (monto <= 0) return;
-      await db.updateVenta(id, { metodo, monto });
-      set((s) => ({ ventas: s.ventas.map((v) => (v.id === id ? { ...v, metodo, monto } : v)) }));
-    }),
-  eliminarVenta: (id) =>
-    conError(async () => {
-      await db.deleteVenta(id);
-      set((s) => ({ ventas: s.ventas.filter((v) => v.id !== id) }));
-    }),
+  // ---------- Ventas (optimista + cola offline) ----------
+  agregarVenta: async (fecha, metodo, monto) => {
+    const negocioId = get().negocioActivoId;
+    if (!negocioId || monto <= 0) return;
+    const id = uuid();
+    const v: Venta = { id, negocioId, fecha, metodo, monto, creadoEn: new Date().toISOString() };
+    set((s) => ({ ventas: [...s.ventas, v] }));
+    get().encolar({ tabla: "ventas", tipo: "insert", payload: { id, negocio_id: negocioId, fecha, metodo, monto } });
+  },
+  editarVenta: async (id, metodo, monto) => {
+    if (monto <= 0) return;
+    set((s) => ({ ventas: s.ventas.map((v) => (v.id === id ? { ...v, metodo, monto } : v)) }));
+    get().encolar({ tabla: "ventas", tipo: "update", payload: { id, patch: { metodo, monto } } });
+  },
+  eliminarVenta: async (id) => {
+    set((s) => ({ ventas: s.ventas.filter((v) => v.id !== id) }));
+    get().encolar({ tabla: "ventas", tipo: "delete", payload: { id } });
+  },
 
   // ---------- Gastos ----------
-  agregarGasto: (fecha, concepto, monto) =>
-    conError(async () => {
-      const negocioId = get().negocioActivoId;
-      if (!negocioId || monto <= 0) return;
-      const g = await db.insertGasto({ negocioId, fecha, concepto: concepto.trim() || "Gasto", monto });
-      set((s) => ({ gastos: [...s.gastos, g] }));
-    }),
-  editarGasto: (id, concepto, monto) =>
-    conError(async () => {
-      if (monto <= 0) return;
-      const c = concepto.trim() || "Gasto";
-      await db.updateGasto(id, { concepto: c, monto });
-      set((s) => ({ gastos: s.gastos.map((g) => (g.id === id ? { ...g, concepto: c, monto } : g)) }));
-    }),
-  eliminarGasto: (id) =>
-    conError(async () => {
-      await db.deleteGasto(id);
-      set((s) => ({ gastos: s.gastos.filter((g) => g.id !== id) }));
-    }),
+  agregarGasto: async (fecha, concepto, monto) => {
+    const negocioId = get().negocioActivoId;
+    if (!negocioId || monto <= 0) return;
+    const c = concepto.trim() || "Gasto";
+    const id = uuid();
+    const g: Gasto = { id, negocioId, fecha, concepto: c, monto, creadoEn: new Date().toISOString() };
+    set((s) => ({ gastos: [...s.gastos, g] }));
+    get().encolar({ tabla: "gastos", tipo: "insert", payload: { id, negocio_id: negocioId, fecha, concepto: c, monto } });
+  },
+  editarGasto: async (id, concepto, monto) => {
+    if (monto <= 0) return;
+    const c = concepto.trim() || "Gasto";
+    set((s) => ({ gastos: s.gastos.map((g) => (g.id === id ? { ...g, concepto: c, monto } : g)) }));
+    get().encolar({ tabla: "gastos", tipo: "update", payload: { id, patch: { concepto: c, monto } } });
+  },
+  eliminarGasto: async (id) => {
+    set((s) => ({ gastos: s.gastos.filter((g) => g.id !== id) }));
+    get().encolar({ tabla: "gastos", tipo: "delete", payload: { id } });
+  },
 
   // ---------- Entradas ----------
-  agregarEntrada: (fecha, concepto, monto) =>
-    conError(async () => {
-      const negocioId = get().negocioActivoId;
-      if (!negocioId || monto <= 0) return;
-      const e = await db.insertEntrada({ negocioId, fecha, concepto: concepto.trim() || "Entrada", monto });
-      set((s) => ({ entradas: [...s.entradas, e] }));
-    }),
-  editarEntrada: (id, concepto, monto) =>
-    conError(async () => {
-      if (monto <= 0) return;
-      const c = concepto.trim() || "Entrada";
-      await db.updateEntrada(id, { concepto: c, monto });
-      set((s) => ({ entradas: s.entradas.map((e) => (e.id === id ? { ...e, concepto: c, monto } : e)) }));
-    }),
-  eliminarEntrada: (id) =>
-    conError(async () => {
-      await db.deleteEntrada(id);
-      set((s) => ({ entradas: s.entradas.filter((e) => e.id !== id) }));
-    }),
+  agregarEntrada: async (fecha, concepto, monto) => {
+    const negocioId = get().negocioActivoId;
+    if (!negocioId || monto <= 0) return;
+    const c = concepto.trim() || "Entrada";
+    const id = uuid();
+    const e: Entrada = { id, negocioId, fecha, concepto: c, monto, creadoEn: new Date().toISOString() };
+    set((s) => ({ entradas: [...s.entradas, e] }));
+    get().encolar({ tabla: "entradas", tipo: "insert", payload: { id, negocio_id: negocioId, fecha, concepto: c, monto } });
+  },
+  editarEntrada: async (id, concepto, monto) => {
+    if (monto <= 0) return;
+    const c = concepto.trim() || "Entrada";
+    set((s) => ({ entradas: s.entradas.map((e) => (e.id === id ? { ...e, concepto: c, monto } : e)) }));
+    get().encolar({ tabla: "entradas", tipo: "update", payload: { id, patch: { concepto: c, monto } } });
+  },
+  eliminarEntrada: async (id) => {
+    set((s) => ({ entradas: s.entradas.filter((e) => e.id !== id) }));
+    get().encolar({ tabla: "entradas", tipo: "delete", payload: { id } });
+  },
 
   // ---------- Apartados ----------
-  agregarApartado: ({ tipo, descripcion, fecha, cliente, telefono, valorTotal, abonoInicial, metodoInicial }) =>
-    conError(async () => {
-      const negocioId = get().negocioActivoId;
-      if (!negocioId || !cliente.trim()) return;
-      const estado = estadoDe(valorTotal, abonoInicial);
-      const ap = await db.insertApartado({ negocioId, tipo, descripcion: descripcion.trim(), fecha, cliente: cliente.trim(), telefono: telefono.trim(), valorTotal, estado });
-      if (abonoInicial > 0) {
-        const ab = await db.insertAbono({ apartadoId: ap.id, fecha, monto: abonoInicial, metodo: metodoInicial });
-        ap.abonos = [ab];
-      }
-      set((s) => ({ apartados: [...s.apartados, ap] }));
-    }),
-  abonarApartado: (id, fecha, monto, metodo) =>
-    conError(async () => {
-      if (monto <= 0) return;
-      const ap = get().apartados.find((a) => a.id === id);
-      if (!ap) return;
-      const ab = await db.insertAbono({ apartadoId: id, fecha, monto, metodo });
-      const abonos = [...ap.abonos, ab];
-      // El estado en la BD lo recalcula un trigger; aquí solo actualizamos la vista.
-      const nuevoEstado = estadoDe(ap.valorTotal, abonos.reduce((t, x) => t + x.monto, 0));
-      set((s) => ({ apartados: s.apartados.map((a) => (a.id === id ? { ...a, abonos, estado: nuevoEstado } : a)) }));
-    }),
-  editarApartado: (id, datos) =>
-    conError(async () => {
-      const ap = get().apartados.find((a) => a.id === id);
-      if (!ap) return;
-      const estado = estadoDe(datos.valorTotal, abonadoDe(ap));
-      await db.updateApartado(id, { cliente: datos.cliente.trim(), telefono: datos.telefono.trim(), fecha: datos.fecha, valorTotal: datos.valorTotal, descripcion: datos.descripcion.trim(), estado });
-      set((s) => ({
-        apartados: s.apartados.map((a) =>
-          a.id === id ? { ...a, cliente: datos.cliente.trim() || a.cliente, telefono: datos.telefono.trim(), fecha: datos.fecha, valorTotal: datos.valorTotal, descripcion: datos.descripcion.trim(), estado } : a,
-        ),
-      }));
-    }),
-  marcarConseguido: (id, conseguido) =>
-    conError(async () => {
-      await db.updateApartado(id, { conseguido });
-      set((s) => ({ apartados: s.apartados.map((a) => (a.id === id ? { ...a, conseguido } : a)) }));
-    }),
-  marcarEntregado: (id, entregado) =>
-    conError(async () => {
-      await db.updateApartado(id, { entregado, ...(entregado ? { conseguido: true } : {}) });
-      set((s) => ({ apartados: s.apartados.map((a) => (a.id === id ? { ...a, entregado, conseguido: entregado ? true : a.conseguido } : a)) }));
-    }),
-  eliminarAbono: (apartadoId, abonoId) =>
-    conError(async () => {
-      await db.deleteAbono(abonoId);
-      const ap = get().apartados.find((a) => a.id === apartadoId);
-      if (!ap) return;
-      const abonos = ap.abonos.filter((x) => x.id !== abonoId);
-      // El estado en la BD lo recalcula un trigger; aquí solo actualizamos la vista.
-      const nuevoEstado = estadoDe(ap.valorTotal, abonos.reduce((t, x) => t + x.monto, 0));
-      set((s) => ({ apartados: s.apartados.map((a) => (a.id === apartadoId ? { ...a, abonos, estado: nuevoEstado } : a)) }));
-    }),
-  eliminarApartado: (id) =>
-    conError(async () => {
-      await db.deleteApartado(id);
-      set((s) => ({ apartados: s.apartados.filter((a) => a.id !== id) }));
-    }),
+  agregarApartado: async ({ tipo, descripcion, fecha, cliente, telefono, valorTotal, abonoInicial, metodoInicial }) => {
+    const negocioId = get().negocioActivoId;
+    if (!negocioId || !cliente.trim()) return;
+    const id = uuid();
+    const desc = descripcion.trim();
+    const cli = cliente.trim();
+    const tel = telefono.trim();
+    const estado = estadoDe(valorTotal, abonoInicial);
+    const abonos: Abono[] = [];
+    if (abonoInicial > 0) abonos.push({ id: uuid(), fecha, monto: abonoInicial, metodo: metodoInicial });
+    const ap: Apartado = { id, negocioId, tipo, descripcion: desc, fecha, cliente: cli, telefono: tel, valorTotal, abonos, estado, conseguido: false, entregado: false, creadoEn: new Date().toISOString() };
+    set((s) => ({ apartados: [...s.apartados, ap] }));
+    get().encolar({ tabla: "apartados", tipo: "insert", payload: { id, negocio_id: negocioId, tipo, descripcion: desc, fecha, cliente: cli, telefono: tel, valor_total: valorTotal, estado } });
+    if (abonos.length) get().encolar({ tabla: "abonos", tipo: "insert", payload: { id: abonos[0].id, apartado_id: id, fecha, monto: abonoInicial, metodo: metodoInicial } });
+  },
+  abonarApartado: async (id, fecha, monto, metodo) => {
+    if (monto <= 0) return;
+    const ap = get().apartados.find((a) => a.id === id);
+    if (!ap) return;
+    const abId = uuid();
+    const abonos = [...ap.abonos, { id: abId, fecha, monto, metodo }];
+    const nuevoEstado = estadoDe(ap.valorTotal, abonos.reduce((t, x) => t + x.monto, 0));
+    set((s) => ({ apartados: s.apartados.map((a) => (a.id === id ? { ...a, abonos, estado: nuevoEstado } : a)) }));
+    get().encolar({ tabla: "abonos", tipo: "insert", payload: { id: abId, apartado_id: id, fecha, monto, metodo } });
+  },
+  editarApartado: async (id, datos) => {
+    const ap = get().apartados.find((a) => a.id === id);
+    if (!ap) return;
+    const cli = datos.cliente.trim() || ap.cliente;
+    const tel = datos.telefono.trim();
+    const desc = datos.descripcion.trim();
+    const estado = estadoDe(datos.valorTotal, abonadoDe(ap));
+    set((s) => ({ apartados: s.apartados.map((a) => (a.id === id ? { ...a, cliente: cli, telefono: tel, fecha: datos.fecha, valorTotal: datos.valorTotal, descripcion: desc, estado } : a)) }));
+    get().encolar({ tabla: "apartados", tipo: "update", payload: { id, patch: { cliente: cli, telefono: tel, fecha: datos.fecha, valor_total: datos.valorTotal, descripcion: desc, estado } } });
+  },
+  marcarConseguido: async (id, conseguido) => {
+    set((s) => ({ apartados: s.apartados.map((a) => (a.id === id ? { ...a, conseguido } : a)) }));
+    get().encolar({ tabla: "apartados", tipo: "update", payload: { id, patch: { conseguido } } });
+  },
+  marcarEntregado: async (id, entregado) => {
+    set((s) => ({ apartados: s.apartados.map((a) => (a.id === id ? { ...a, entregado, conseguido: entregado ? true : a.conseguido } : a)) }));
+    get().encolar({ tabla: "apartados", tipo: "update", payload: { id, patch: entregado ? { entregado: true, conseguido: true } : { entregado: false } } });
+  },
+  eliminarAbono: async (apartadoId, abonoId) => {
+    const ap = get().apartados.find((a) => a.id === apartadoId);
+    if (!ap) return;
+    const abonos = ap.abonos.filter((x) => x.id !== abonoId);
+    const nuevoEstado = estadoDe(ap.valorTotal, abonos.reduce((t, x) => t + x.monto, 0));
+    set((s) => ({ apartados: s.apartados.map((a) => (a.id === apartadoId ? { ...a, abonos, estado: nuevoEstado } : a)) }));
+    get().encolar({ tabla: "abonos", tipo: "delete", payload: { id: abonoId } });
+  },
+  eliminarApartado: async (id) => {
+    set((s) => ({ apartados: s.apartados.filter((a) => a.id !== id) }));
+    get().encolar({ tabla: "apartados", tipo: "delete", payload: { id } });
+  },
 
   // ---------- Metas y cuadre ----------
-  setMeta: (anio, mes, montoMeta) =>
-    conError(async () => {
-      const negocioId = get().negocioActivoId;
-      if (!negocioId) return;
-      const meta = await db.upsertMeta({ negocioId, anio, mes, montoMeta });
-      set((s) => {
-        const otras = s.metas.filter((m) => !(m.negocioId === negocioId && m.anio === anio && m.mes === mes));
-        return { metas: [...otras, meta] };
-      });
-    }),
-  setCuadre: (fecha, patch) =>
-    conError(async () => {
-      const negocioId = get().negocioActivoId;
-      if (!negocioId) return;
-      const cuadre = await db.upsertCuadre({ negocioId, fecha, ...patch });
-      set((s) => {
-        const otros = s.cuadres.filter((c) => !(c.negocioId === negocioId && c.fecha === fecha));
-        return { cuadres: [...otros, cuadre] };
-      });
-    }),
+  setMeta: async (anio, mes, montoMeta) => {
+    const negocioId = get().negocioActivoId;
+    if (!negocioId) return;
+    set((s) => {
+      const existente = s.metas.find((m) => m.negocioId === negocioId && m.anio === anio && m.mes === mes);
+      const otras = s.metas.filter((m) => !(m.negocioId === negocioId && m.anio === anio && m.mes === mes));
+      const meta: Meta = { id: existente?.id ?? uuid(), negocioId, anio, mes, montoMeta };
+      return { metas: [...otras, meta] };
+    });
+    get().encolar({ tabla: "metas", tipo: "upsert", onConflict: "negocio_id,anio,mes", payload: { negocio_id: negocioId, anio, mes, monto_meta: montoMeta } });
+  },
+  setCuadre: async (fecha, patch) => {
+    const negocioId = get().negocioActivoId;
+    if (!negocioId) return;
+    const base = get().cuadres.find((c) => c.negocioId === negocioId && c.fecha === fecha) ?? null;
+    const cuadre: Cuadre = {
+      id: base?.id ?? uuid(),
+      negocioId,
+      fecha,
+      efectivoReal: patch.efectivoReal ?? base?.efectivoReal ?? 0,
+      baseSiguiente: base?.baseSiguiente ?? 0,
+      cuadrado: patch.cuadrado !== undefined ? patch.cuadrado : (base?.cuadrado ?? null),
+      diferencia: patch.diferencia ?? base?.diferencia ?? 0,
+      creadoEn: base?.creadoEn ?? new Date().toISOString(),
+    };
+    set((s) => ({ cuadres: [...s.cuadres.filter((c) => !(c.negocioId === negocioId && c.fecha === fecha)), cuadre] }));
+    get().encolar({ tabla: "cuadres", tipo: "upsert", onConflict: "negocio_id,fecha", payload: { negocio_id: negocioId, fecha, efectivo_real: cuadre.efectivoReal, cuadrado: cuadre.cuadrado, diferencia: cuadre.diferencia } });
+  },
     }),
     {
       name: "almacen-store",
@@ -429,6 +480,7 @@ export const useStore = create<State>()(
         movHasta: s.movHasta,
         revision: s.revision,
         cargado: s.cargado,
+        pendientes: s.pendientes,
         panelTipo: s.panelTipo,
         panelDesde: s.panelDesde,
         panelHasta: s.panelHasta,

@@ -13,6 +13,8 @@ import { PerfilMenu } from "@/components/PerfilMenu";
 import { BusinessSelector } from "@/components/BusinessSelector";
 import { NotificacionesPedidos } from "@/components/NotificacionesPedidos";
 import { CodigoGate } from "@/components/CodigoGate";
+import { EstadoConexion } from "@/components/EstadoConexion";
+import { SincronizadorOffline } from "@/components/SincronizadorOffline";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated();
@@ -93,6 +95,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-stone-50 text-stone-800">
       <NotificacionesPedidos />
+      <SincronizadorOffline />
       {/* Barra lateral (escritorio) */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-5 border-r border-stone-200 bg-white p-4 md:flex">
         <div className="flex items-center gap-2 px-1 pt-1">
@@ -108,9 +111,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           >
             <LogOut className="h-4 w-4" /> Cerrar sesión
           </button>
-          <div className="rounded-lg bg-emerald-50 px-2 py-1.5 text-xs text-emerald-600">
-            ☁️ En la nube · guardado seguro
-          </div>
+          <EstadoConexion />
         </div>
       </aside>
 
@@ -122,6 +123,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex-1">
             <BusinessSelector />
           </div>
+          <EstadoConexion compacto />
           <PerfilMenu onSalir={salir} />
         </header>
 

@@ -16,6 +16,7 @@ import type {
   Configuracion,
   RegistroHora,
   Tarea,
+  OpPendiente,
   MetodoPago,
   TipoApartado,
   EstadoApartado,
@@ -23,6 +24,28 @@ import type {
 
 function db() {
   return createClient();
+}
+
+/**
+ * Ejecuta una operación de la cola offline contra Supabase.
+ * Los "insert" se hacen como upsert (por id) para que reintentar no duplique.
+ */
+export async function ejecutarOperacion(op: OpPendiente): Promise<void> {
+  const t = db().from(op.tabla);
+  if (op.tipo === "delete") {
+    const { error } = await t.delete().eq("id", (op.payload as { id: string }).id);
+    if (error) throw error;
+    return;
+  }
+  if (op.tipo === "update") {
+    const p = op.payload as { id: string; patch: Record<string, unknown> };
+    const { error } = await t.update(p.patch).eq("id", p.id);
+    if (error) throw error;
+    return;
+  }
+  // insert / upsert → upsert idempotente
+  const { error } = await t.upsert(op.payload, op.onConflict ? { onConflict: op.onConflict } : undefined);
+  if (error) throw error;
 }
 
 // ---------- Mapeos fila → modelo ----------
