@@ -9,15 +9,22 @@ import { confirmar } from "@/lib/alerta";
 import { Nav } from "@/components/Nav";
 import { BusinessSelector } from "@/components/BusinessSelector";
 import { NotificacionesPedidos } from "@/components/NotificacionesPedidos";
+import { CodigoGate } from "@/components/CodigoGate";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated();
   const router = useRouter();
   const [autorizado, setAutorizado] = useState(false);
+  const [desbloqueado, setDesbloqueado] = useState(false);
   const cargando = useStore((s) => s.cargando);
   const cargado = useStore((s) => s.cargado);
+  const esAdmin = useStore((s) => s.esAdmin);
   const cargarDesdeSupabase = useStore((s) => s.cargarDesdeSupabase);
   const limpiar = useStore((s) => s.limpiar);
+
+  useEffect(() => {
+    setDesbloqueado(sessionStorage.getItem("cb-desbloqueo") === "1");
+  }, []);
 
   // Protección: sin sesión de Supabase, al login. Con sesión, carga los datos.
   useEffect(() => {
@@ -34,6 +41,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   async function salir() {
     if (await confirmar("¿Cerrar sesión?", "Tendrás que volver a ingresar con tu correo y contraseña.", "Sí, cerrar sesión")) {
+      sessionStorage.removeItem("cb-desbloqueo");
       await logout();
       limpiar();
       router.replace("/login");
@@ -46,6 +54,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="text-4xl">🐝</div>
         <div className="text-sm text-stone-400">Cargando tu negocio…</div>
       </div>
+    );
+  }
+
+  // El colaborador debe ingresar el código del día para desbloquear.
+  if (cargado && !esAdmin && !desbloqueado) {
+    return (
+      <CodigoGate
+        onOk={() => {
+          sessionStorage.setItem("cb-desbloqueo", "1");
+          setDesbloqueado(true);
+        }}
+      />
     );
   }
 

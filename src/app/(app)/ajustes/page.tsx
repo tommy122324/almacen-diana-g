@@ -1,9 +1,10 @@
 "use client";
 import { useState } from "react";
-import { MessageCircle, Save, Check, Lock } from "lucide-react";
+import { MessageCircle, Save, Check, Lock, KeyRound, RefreshCw } from "lucide-react";
 import { useStore } from "@/lib/store";
-import { avisar } from "@/lib/alerta";
+import { avisar, avisarError } from "@/lib/alerta";
 import { telefonoWhatsApp } from "@/lib/whatsapp";
+import { generarCodigo } from "@/lib/db";
 import { Card, Boton, Input, Field } from "@/components/ui";
 import { GestionUsuarios } from "@/components/GestionUsuarios";
 
@@ -77,13 +78,51 @@ export default function Ajustes() {
         </div>
       </Card>
 
-      {/* Códigos (Fase 7) — próximamente */}
-      <Card className="opacity-70">
-        <div className="mb-1 flex items-center gap-2 font-semibold text-stone-800">🔑 Códigos de acceso</div>
-        <p className="text-sm text-stone-500">
-          Aquí configurarás el correo a donde llegan los códigos diarios para los colaboradores. (Próximo paso)
-        </p>
-      </Card>
+      <CodigosAdmin />
     </div>
+  );
+}
+
+function CodigosAdmin() {
+  const negocioId = useStore((s) => s.negocioActivoId);
+  const [codigo, setCodigo] = useState("");
+  const [expira, setExpira] = useState("");
+  const [generando, setGenerando] = useState(false);
+
+  async function generar() {
+    if (!negocioId) return;
+    setGenerando(true);
+    try {
+      const r = await generarCodigo(negocioId);
+      setCodigo(r.codigo);
+      setExpira(new Date(r.expiraEn).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" }));
+      avisar("Código generado");
+    } catch {
+      avisarError("No se pudo generar el código");
+    } finally {
+      setGenerando(false);
+    }
+  }
+
+  return (
+    <Card>
+      <div className="mb-1 flex items-center gap-2 font-semibold text-stone-800">
+        <KeyRound className="h-5 w-5 text-amber-600" /> Código de acceso para colaboradores
+      </div>
+      <p className="mb-3 text-xs text-stone-500">
+        Genera un código y compártelo con tu colaborador. Al entrar, deberá ingresarlo. Válido 30 minutos.
+      </p>
+
+      {codigo && (
+        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
+          <div className="text-3xl font-bold tracking-widest tabular-nums text-amber-800">{codigo}</div>
+          <div className="mt-1 text-xs text-stone-500">Válido hasta las {expira}</div>
+        </div>
+      )}
+
+      <Boton onClick={generar} disabled={generando}>
+        <RefreshCw className="h-4 w-4" /> {generando ? "Generando…" : codigo ? "Generar nuevo código" : "Generar código"}
+      </Boton>
+    </Card>
   );
 }

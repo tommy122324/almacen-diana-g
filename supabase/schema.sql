@@ -337,6 +337,33 @@ drop policy if exists metas_all on public.metas;
 create policy metas_admin on public.metas for all using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
 
 -- ============================================================
+-- FASE 7b — Códigos de acceso para colaboradores
+-- ============================================================
+create table if not exists public.codigos (
+  id          uuid primary key default gen_random_uuid(),
+  negocio_id  uuid not null references public.negocios(id) on delete cascade,
+  codigo      text not null,
+  expira_en   timestamptz not null,
+  creado_en   timestamptz not null default now()
+);
+create index if not exists idx_codigos_neg on public.codigos(negocio_id, expira_en);
+alter table public.codigos enable row level security;
+drop policy if exists codigos_admin on public.codigos;
+create policy codigos_admin on public.codigos for all
+  using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
+
+-- El colaborador NO lee la tabla; solo valida con esta función (security definer)
+create or replace function public.validar_codigo(p_negocio uuid, p_codigo text)
+returns boolean language sql security definer set search_path = public as $$
+  select exists (
+    select 1 from public.codigos
+    where negocio_id = p_negocio and codigo = p_codigo and expira_en > now()
+      and public.es_miembro(p_negocio)
+  );
+$$;
+grant execute on function public.validar_codigo(uuid, text) to anon, authenticated;
+
+-- ============================================================
 -- Permisos para el rol de la app (la seguridad real la pone RLS)
 -- ============================================================
 grant usage on schema public to anon, authenticated;

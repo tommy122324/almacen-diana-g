@@ -298,6 +298,21 @@ export async function guardarConfig(negocioId: string, patch: Partial<Configurac
   return { whatsapp: s(data.whatsapp), correoCodigos: s(data.correo_codigos) };
 }
 
+// ---------- Códigos de acceso (Fase 7b) ----------
+export async function generarCodigo(negocioId: string): Promise<{ codigo: string; expiraEn: string }> {
+  const codigo = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
+  const expiraEn = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  const { error } = await db().from("codigos").insert({ negocio_id: negocioId, codigo, expira_en: expiraEn });
+  if (error) throw error;
+  return { codigo, expiraEn };
+}
+
+export async function validarCodigo(negocioId: string, codigo: string): Promise<boolean> {
+  const { data, error } = await db().rpc("validar_codigo", { p_negocio: negocioId, p_codigo: codigo.trim() });
+  if (error) throw error;
+  return Boolean(data);
+}
+
 // ---------- Cuadres ----------
 export async function upsertCuadre(c: {
   negocioId: string;
