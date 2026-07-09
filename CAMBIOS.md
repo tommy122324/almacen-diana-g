@@ -60,6 +60,40 @@
    - Si caja hoy > caja ayer → equivale a `utilidad − (hoy − ayer)`.
    - Si caja hoy < caja ayer → equivale a `utilidad + (ayer − hoy)`.
 
+## Plan detallado para mañana (Fases 7b y 7c) — CERRADO
+
+### Fase 7b — Códigos de acceso
+- Tabla `codigos` (negocio_id, codigo, expira_en, creado_en).
+- Admin: **Ajustes → Códigos** → botón "Generar código" (6 dígitos, válido 30 min); lo ve en pantalla.
+- Colaborador: tras el login, una pantalla le **pide el código** para desbloquear el sistema
+  (se valida con una función `validar_codigo` de la BD para no exponer el código).
+- El desbloqueo dura la sesión (vuelve a pedirlo al reingresar). Envío por correo → 7e.
+
+### Fase 7c — Registro de hora + Nómina
+Decisiones: descuento con **salario mínimo legal** (configurable en Ajustes) · el admin lo ve
+al abrir Nómina (sin realtime) · **solo hora de entrada** por ahora · jornada 9am–9pm.
+
+- **Config:** agregar `salario_minimo` (mensual) en `configuracion` (Ajustes).
+  Valor por minuto ≈ salario_minimo ÷ (30 × 12 × 60). (Ajustar divisor si hace falta.)
+- **Tabla `registros_hora`** (negocio_id, usuario_id, fecha, hora_entrada, minutos_tarde,
+  descuento). Único por (negocio, usuario, fecha).
+- **RPC `registrar_entrada`** (security definer): usa la **hora del servidor** (Bogotá, no la
+  del dispositivo), calcula minutos de retraso (si entra después de 9:15) y el descuento, y
+  guarda el registro. Así no se puede falsear la hora.
+- **Empleado:** sección "Mi entrada" → botón "Registrar entrada"; si es tarde, advertencia:
+  "Tu retraso será descontado de la próxima quincena. Descuento: $X".
+- **Admin:** sección **"Nómina / Empleados"** (solo admin):
+  - Por empleado: entradas del mes, retrasos y descuentos (total).
+  - Registrar **pagos/abonos** al empleado → se crean como **gasto** (columna `empleado_id`
+    en `gastos`), así cuentan en los gastos generales.
+  - **PDF por empleado** del mes (entradas, retrasos, descuentos, pagos).
+- RLS: empleado registra/ve solo lo suyo; admin ve/gestiona todo del negocio.
+
+### Fase 7e — Envío de códigos por correo (al final)
+- Configurar un servicio de correo gratis (EmailJS/Resend) para que el código llegue solo.
+
+---
+
 ## Orden de ejecución propuesto
 1. 🐛 Bug apartados/pedidos (#6) — **urgente (datos)**.
 2. Quitar "Tarjeta de crédito", dejar "Tarjeta" (#4).
