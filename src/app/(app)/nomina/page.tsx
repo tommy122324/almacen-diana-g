@@ -434,11 +434,13 @@ function FilaPago({
     );
   }
 
+  // Solo mostramos la firma si de verdad es una imagen (evita URLs maliciosas por API).
+  const firmaValida = typeof pago.firma === "string" && pago.firma.startsWith("data:image/");
   return (
     <div className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-stone-50">
       <span className="text-stone-400">{formatFechaCorta(pago.fecha)}</span>
       <span className="flex-1">{pago.concepto}</span>
-      {pago.firma ? (
+      {firmaValida ? (
         <a href={pago.firma} target="_blank" rel="noreferrer" title="Ver firma">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={pago.firma} alt="firma" className="h-7 w-16 rounded border border-stone-200 object-contain" />

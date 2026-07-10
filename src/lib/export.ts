@@ -221,11 +221,12 @@ export async function exportarNominaPDF(d: {
     margin: { left: M, right: M },
   });
 
+  const tieneFirma = (p: Gasto) => typeof p.firma === "string" && p.firma.startsWith("data:image/");
   y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
   autoTable(doc, {
     startY: y,
     head: [["Fecha", "Concepto", "Firma", "Pagado"]],
-    body: d.pagos.map((p) => [formatFechaCorta(p.fecha), p.concepto, p.firma ? "Sí" : "—", formatCOP(p.monto)]),
+    body: d.pagos.map((p) => [formatFechaCorta(p.fecha), p.concepto, tieneFirma(p) ? "Sí" : "—", formatCOP(p.monto)]),
     foot: [["", "", "Total pagado", formatCOP(totalPagos)]],
     theme: "grid",
     headStyles: { fillColor: [16, 185, 129] },
@@ -234,7 +235,7 @@ export async function exportarNominaPDF(d: {
   });
 
   // Firmas (imágenes) como constancia de los pagos
-  const conFirma = d.pagos.filter((p) => p.firma);
+  const conFirma = d.pagos.filter(tieneFirma);
   if (conFirma.length) {
     y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
     doc.setFontSize(11);
