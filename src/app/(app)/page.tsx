@@ -143,7 +143,7 @@ export default function Panel() {
   function pctHint(actual: number, anterior: number): string | undefined {
     const v = variacion(actual, anterior);
     if (v === null) return anterior === 0 && actual > 0 ? "nuevo" : undefined;
-    if (v === 0) return "igual que antes";
+    if (v === 0) return undefined;
     return `${v > 0 ? "▲" : "▼"} ${Math.abs(v).toFixed(0)}% vs ${labelP} anterior`;
   }
 
