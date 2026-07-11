@@ -11,8 +11,10 @@ export const config = {
     /*
      * Aplica a todas las rutas EXCEPTO:
      * - _next/static, _next/image (recursos)
-     * - favicon y archivos de imagen
+     * - archivos públicos que el navegador pide sin sesión:
+     *   manifest, service worker, favicon e imágenes
+     *   (si no se excluyen, el redirect a /login los rompe)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|webmanifest|ico)$).*)",
   ],
 };
