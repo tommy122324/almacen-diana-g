@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Plus, Trash2, Phone, ChevronDown, ChevronUp, ChevronRight, CircleDollarSign, Pencil, Check, X, Package, ClipboardList, PackageCheck, FileText, RotateCcw, MessageCircle } from "lucide-react";
+import { Plus, Trash2, Phone, ChevronDown, ChevronUp, ChevronRight, CircleDollarSign, Pencil, Check, X, Package, ClipboardList, PackageCheck, FileText, RotateCcw, MessageCircle, Search } from "lucide-react";
 import { useStore, abonadoDe, saldoDe } from "@/lib/store";
 import { METODOS, METODO_LABEL, type Apartado, type MetodoPago, type TipoApartado } from "@/lib/types";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
@@ -19,6 +19,7 @@ export default function Apartados() {
   const agregar = useStore((s) => s.agregarApartado);
   const eliminar = useStore((s) => s.eliminarApartado);
 
+  const [busqueda, setBusqueda] = useState("");
   const [tipo, setTipo] = useState<TipoApartado>("apartado");
   const [descripcion, setDescripcion] = useState("");
   const [cliente, setCliente] = useState("");
@@ -39,8 +40,16 @@ export default function Apartados() {
   }
 
   const g = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    const qDigitos = q.replace(/\D/g, "");
+    const coincide = (a: Apartado) => {
+      if (!q) return true;
+      const porNombre = a.cliente.toLowerCase().includes(q);
+      const porTel = qDigitos.length > 0 && a.telefono.replace(/\D/g, "").includes(qDigitos);
+      return porNombre || porTel;
+    };
     const propios = apartados
-      .filter((a) => a.negocioId === negocioId)
+      .filter((a) => a.negocioId === negocioId && coincide(a))
       .sort((a, b) => b.fecha.localeCompare(a.fecha));
     // Un pedido se "completa" cuando se entrega; un apartado cuando se paga.
     const estaCompleto = (a: Apartado) => (a.tipo === "pedido" ? a.entregado : a.estado === "completado");
@@ -56,8 +65,9 @@ export default function Apartados() {
       totAbonado: apartPend.reduce((s, a) => s + abonadoDe(a), 0),
       totSaldo: apartPend.reduce((s, a) => s + saldoDe(a), 0),
     };
-  }, [apartados, negocioId]);
+  }, [apartados, negocioId, busqueda]);
 
+  const buscando = busqueda.trim().length > 0;
   const diferenciaPreview = Math.max(0, valorTotal - abonoInicial);
   const negocio = negocios.find((n) => n.id === negocioId)?.nombre ?? "Almacén Diana G";
   const pedidosNegocio = apartados.filter((a) => a.negocioId === negocioId && a.tipo === "pedido");
@@ -158,6 +168,26 @@ export default function Apartados() {
         </div>
       </Card>
 
+      {/* Buscador (filtra apartados y pedidos por nombre o teléfono) */}
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+        <input
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar por nombre o número…"
+          className={`${inputCls} pl-9 pr-9`}
+        />
+        {busqueda && (
+          <button
+            onClick={() => setBusqueda("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-rose-500"
+            aria-label="Limpiar búsqueda"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
       {/* ── SECCIÓN APARTADOS (ámbar) ── */}
       <section className="rounded-2xl border-2 border-amber-200 bg-amber-50/50 p-4">
         <div className="mb-3 flex items-center gap-2">
@@ -166,8 +196,8 @@ export default function Apartados() {
           <span className="rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-800">{g.apartPend.length} pendientes</span>
         </div>
         <div className="space-y-3">
-          <ListaPlegable titulo="Pendientes" items={g.apartPend} abiertoInicial onEliminar={borrarApartado} puedeAdmin={esAdmin} />
-          {g.apartComp.length > 0 && <ListaPlegable titulo="Completados" items={g.apartComp} abiertoInicial={false} onEliminar={borrarApartado} puedeAdmin={esAdmin} />}
+          <ListaPlegable titulo="Pendientes" items={g.apartPend} abiertoInicial forzarAbierto={buscando} onEliminar={borrarApartado} puedeAdmin={esAdmin} />
+          {g.apartComp.length > 0 && <ListaPlegable titulo="Completados" items={g.apartComp} abiertoInicial={false} forzarAbierto={buscando} onEliminar={borrarApartado} puedeAdmin={esAdmin} />}
         </div>
       </section>
 
@@ -186,8 +216,8 @@ export default function Apartados() {
           )}
         </div>
         <div className="space-y-3">
-          <ListaPlegable titulo="Pendientes" items={g.pedPend} abiertoInicial onEliminar={borrarApartado} puedeAdmin={esAdmin} />
-          {g.pedComp.length > 0 && <ListaPlegable titulo="Entregados" items={g.pedComp} abiertoInicial={false} onEliminar={borrarApartado} puedeAdmin={esAdmin} />}
+          <ListaPlegable titulo="Pendientes" items={g.pedPend} abiertoInicial forzarAbierto={buscando} onEliminar={borrarApartado} puedeAdmin={esAdmin} />
+          {g.pedComp.length > 0 && <ListaPlegable titulo="Entregados" items={g.pedComp} abiertoInicial={false} forzarAbierto={buscando} onEliminar={borrarApartado} puedeAdmin={esAdmin} />}
         </div>
       </section>
     </div>
@@ -199,16 +229,19 @@ function ListaPlegable({
   titulo,
   items,
   abiertoInicial,
+  forzarAbierto,
   onEliminar,
   puedeAdmin,
 }: {
   titulo: string;
   items: Apartado[];
   abiertoInicial: boolean;
+  forzarAbierto?: boolean;
   onEliminar: (a: Apartado) => void;
   puedeAdmin: boolean;
 }) {
-  const [abierto, setAbierto] = useState(abiertoInicial);
+  const [abiertoLocal, setAbierto] = useState(abiertoInicial);
+  const abierto = forzarAbierto || abiertoLocal;
   return (
     <div>
       <button onClick={() => setAbierto((v) => !v)} className="mb-2 flex w-full items-center gap-2 text-sm font-semibold text-stone-700">
