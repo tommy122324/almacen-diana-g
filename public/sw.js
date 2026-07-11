@@ -26,6 +26,9 @@ self.addEventListener("fetch", (e) => {
   // Solo GET del mismo origen; lo demás (Supabase, POST, etc.) va directo a la red.
   if (req.method !== "GET" || url.origin !== self.location.origin) return;
 
+  // Nunca cachear la API (ej: la comprobación de versión debe ser siempre fresca).
+  if (url.pathname.startsWith("/api/")) return;
+
   // Navegaciones (abrir una página): red primero, con respaldo del caché.
   if (req.mode === "navigate") {
     e.respondWith(

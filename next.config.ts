@@ -20,6 +20,10 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // Identificador de la versión desplegada (para avisar cuando hay una nueva).
+  env: {
+    NEXT_PUBLIC_BUILD_ID: process.env.VERCEL_GIT_COMMIT_SHA || "dev",
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
