@@ -2,7 +2,7 @@
 // Guarda la app en el dispositivo para que abra aunque no haya internet.
 // No toca las peticiones a Supabase (otro dominio): esas van directo a la red.
 
-const CACHE = "adg-cache-v1";
+const CACHE = "adg-cache-v2";
 const SHELL = "app-shell";
 
 self.addEventListener("install", (e) => {
