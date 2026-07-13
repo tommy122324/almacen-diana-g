@@ -248,7 +248,10 @@ export function resumenEfectivo(
     const utilEf = efVentas + efAbonos + ent - gas;
     esperado += utilEf;
     const cuadre = cuadres.find((c) => c.negocioId === negocioId && c.fecha === iso);
+    // Días con cuadre: efectivo reconciliado (incluye descuadres).
+    // Días sin cuadre: se suma el efectivo esperado del día (ventas/abonos/entradas en efectivo − gastos).
     if (cuadre) neto += utilEf + cajaAyerDe(iso) - cuadre.efectivoReal;
+    else neto += utilEf;
   }
   return { esperadoEfectivo: esperado, efectivoNeto: neto };
 }

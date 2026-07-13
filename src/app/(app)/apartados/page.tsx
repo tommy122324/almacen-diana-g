@@ -271,6 +271,7 @@ function ApartadoCard({ apartado, onEliminar, puedeAdmin }: { apartado: Apartado
   const [abierto, setAbierto] = useState(false);
   const [monto, setMonto] = useState(0);
   const [metodoAbono, setMetodoAbono] = useState<MetodoPago>("efectivo");
+  const [fechaAbono, setFechaAbono] = useState(hoyISO());
   const [editando, setEditando] = useState(false);
   const [ed, setEd] = useState({
     cliente: apartado.cliente,
@@ -289,8 +290,9 @@ function ApartadoCard({ apartado, onEliminar, puedeAdmin }: { apartado: Apartado
 
   function registrarAbono() {
     if (monto > 0) {
-      abonar(apartado.id, hoyISO(), monto, metodoAbono);
+      abonar(apartado.id, fechaAbono || hoyISO(), monto, metodoAbono);
       setMonto(0);
+      setFechaAbono(hoyISO());
       avisar("Abono registrado");
     }
   }
@@ -455,9 +457,10 @@ function ApartadoCard({ apartado, onEliminar, puedeAdmin }: { apartado: Apartado
 
       {/* Acciones */}
       {!completado && (
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <MoneyInput value={monto} onChange={setMonto} onEnter={registrarAbono} className="flex-1" placeholder="Nuevo abono" />
-          <Select value={metodoAbono} onChange={(e) => setMetodoAbono(e.target.value as MetodoPago)} className="sm:w-44">
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <MoneyInput value={monto} onChange={setMonto} onEnter={registrarAbono} className="flex-1 sm:min-w-[120px]" placeholder="Nuevo abono" />
+          <Input type="date" value={fechaAbono} onChange={(e) => setFechaAbono(e.target.value)} className="w-auto" title="Fecha del abono" />
+          <Select value={metodoAbono} onChange={(e) => setMetodoAbono(e.target.value as MetodoPago)} className="sm:w-40">
             {METODOS.map((m) => (
               <option key={m} value={m}>{METODO_LABEL[m]}</option>
             ))}
