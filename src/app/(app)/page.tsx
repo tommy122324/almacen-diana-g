@@ -83,7 +83,12 @@ export default function Panel() {
     );
     const serie = serieDiaria(v, g, e, periodo, abonosPorDia(apartados, negocioId, periodo));
     const efectivo = resumenEfectivo(ventas, gastos, entradas, apartados, cuadres, negocioId, periodo);
-    return { v, g, e, r, rp, serie, efectivo };
+    // Valor total de los apartados creados en el periodo → se suma SOLO a "Ventas".
+    const sumApart = (p: Periodo) =>
+      filtrar(apartados, negocioId, p).filter((a) => a.tipo === "apartado").reduce((s, a) => s + a.valorTotal, 0);
+    const apartVentas = sumApart(periodo);
+    const apartVentasPrev = sumApart(periodoPrev);
+    return { v, g, e, r, rp, serie, efectivo, apartVentas, apartVentasPrev };
   }, [ventas, gastos, entradas, apartados, cuadres, negocioId, periodo, periodoPrev]);
 
   // Meta del mes actual
@@ -187,7 +192,7 @@ export default function Panel() {
 
       {/* Tarjetas */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <StatCard label="Ventas" value={datos.r.totalVentas} tone="green" hint={pctHint(datos.r.totalVentas, datos.rp.totalVentas)} />
+        <StatCard label="Ventas" value={datos.r.totalVentas + datos.apartVentas} tone="green" hint={pctHint(datos.r.totalVentas + datos.apartVentas, datos.rp.totalVentas + datos.apartVentasPrev)} />
         <StatCard label="Gastos" value={datos.r.totalGastos} tone="red" hint={pctHint(datos.r.totalGastos, datos.rp.totalGastos)} />
         <StatCard label="Entradas" value={datos.r.totalEntradas} tone="default" />
         <StatCard

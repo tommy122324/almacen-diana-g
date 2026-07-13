@@ -64,6 +64,13 @@ export default function RegistroDia() {
   const totalDia = totalVentas + totalEntradas + totalAbonos; // todo lo recibido
   const utilidad = totalDia - totalGastos;
 
+  // Valor total de los APARTADOS creados este día. Se muestra SOLO en "Ventas"
+  // (no entra a utilidad, efectivo ni total del día — los abonos siguen su lógica).
+  const apartadosDelDia = apartados
+    .filter((a) => a.negocioId === negocioId && a.tipo === "apartado" && a.fecha === fecha)
+    .reduce((s, a) => s + a.valorTotal, 0);
+  const ventasConApartados = totalVentas + apartadosDelDia;
+
   // Ingresos por método (ventas + abonos) del día — para el gráfico del cuadre
   const ingresosPorMetodo = useMemo(() => {
     const map = Object.fromEntries(METODOS.map((m) => [m, 0])) as Record<MetodoPago, number>;
@@ -122,7 +129,7 @@ export default function RegistroDia() {
 
       {/* Resumen del día */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <MiniStat label="Ventas" value={totalVentas} tone="text-emerald-600" />
+        <MiniStat label="Ventas" value={ventasConApartados} tone="text-emerald-600" hint={apartadosDelDia > 0 ? "incluye apartados" : undefined} />
         <MiniStat label="Abonos" value={totalAbonos} tone="text-amber-600" />
         <MiniStat label="Entradas" value={totalEntradas} tone="text-sky-600" />
         <MiniStat label="Gastos" value={totalGastos} tone="text-rose-600" />
@@ -310,11 +317,12 @@ export default function RegistroDia() {
   );
 }
 
-function MiniStat({ label, value, tone }: { label: string; value: number; tone: string }) {
+function MiniStat({ label, value, tone, hint }: { label: string; value: number; tone: string; hint?: string }) {
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
       <div className="text-xs text-stone-500">{label}</div>
       <div className={`mt-0.5 text-lg font-bold tabular-nums ${tone}`}>{formatCOP(value)}</div>
+      {hint && <div className="text-[10px] text-stone-400">{hint}</div>}
     </div>
   );
 }
