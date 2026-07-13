@@ -267,7 +267,7 @@ begin
   select coalesce(sum(monto), 0) into total from public.abonos where apartado_id = ap_id;
   select valor_total into vt from public.apartados where id = ap_id;
   update public.apartados
-    set estado = case when vt > 0 and total >= vt then 'completado' else 'pendiente' end
+    set estado = (case when vt > 0 and total >= vt then 'completado' else 'pendiente' end)::estado_apartado
     where id = ap_id;
   return null;
 end;
