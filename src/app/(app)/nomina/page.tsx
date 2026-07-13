@@ -18,7 +18,7 @@ import {
   type Miembro,
 } from "@/lib/db";
 import type { RegistroHora, Gasto } from "@/lib/types";
-import { avisar, avisarError, confirmar, confirmarEliminar } from "@/lib/alerta";
+import { avisar, avisarError, confirmar, confirmarEliminar, avisarFalta } from "@/lib/alerta";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { exportarNominaPDF } from "@/lib/export";
 import { Card, Boton, Input, StatCard, Select, Chip } from "@/components/ui";
@@ -194,9 +194,13 @@ function NominaAdmin() {
   const mesLabel = new Date(mes + "-01T00:00").toLocaleDateString("es-CO", { month: "long", year: "numeric" });
 
   async function pagar() {
-    if (!negocioId || !selId || monto <= 0) return;
+    if (!negocioId || !selId) return;
+    if (monto <= 0) {
+      avisarFalta("Escribe el monto del pago.");
+      return;
+    }
     if (!firma) {
-      avisarError("Falta la firma del empleado para registrar el pago.");
+      avisarFalta("Falta la firma del empleado para registrar el pago.");
       return;
     }
     setGuardando(true);
@@ -264,9 +268,12 @@ function NominaAdmin() {
     }
   }
   async function guardarEdicionPago(p: Gasto, nConcepto: string, nMonto: number, nFirma: string): Promise<boolean> {
-    if (nMonto <= 0) return false;
+    if (nMonto <= 0) {
+      avisarFalta("Escribe el monto del pago.");
+      return false;
+    }
     if (!nFirma) {
-      avisarError("Falta la firma nueva del empleado para guardar el cambio.");
+      avisarFalta("Falta la firma nueva del empleado para guardar el cambio.");
       return false;
     }
     try {

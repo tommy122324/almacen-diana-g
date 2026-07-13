@@ -5,7 +5,7 @@ import { useStore, abonadoDe, saldoDe } from "@/lib/store";
 import { METODOS, METODO_LABEL, type Apartado, type MetodoPago, type TipoApartado } from "@/lib/types";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { hoyISO } from "@/lib/calc";
-import { avisar, confirmarEliminar } from "@/lib/alerta";
+import { avisar, confirmarEliminar, avisarFalta } from "@/lib/alerta";
 import { exportarPedidosPDF } from "@/lib/export";
 import { abrirWhatsApp, mensajePedidoLlego } from "@/lib/whatsapp";
 import { MoneyInput } from "@/components/MoneyInput";
@@ -73,19 +73,26 @@ export default function Apartados() {
   const pedidosNegocio = apartados.filter((a) => a.negocioId === negocioId && a.tipo === "pedido");
 
   function add() {
-    const okCliente = cliente.trim();
-    const okApartado = esPedido || valorTotal > 0;
-    const okPedido = !esPedido || descripcion.trim();
-    if (okCliente && okApartado && okPedido) {
-      agregar({ tipo, descripcion, fecha, cliente, telefono, valorTotal, abonoInicial, metodoInicial });
-      setDescripcion("");
-      setCliente("");
-      setTelefono("");
-      setValorTotal(0);
-      setAbonoInicial(0);
-      setMetodoInicial("efectivo");
-      avisar(esPedido ? "Pedido registrado" : "Apartado registrado");
+    if (!cliente.trim()) {
+      avisarFalta("Falta el nombre del cliente.");
+      return;
     }
+    if (esPedido && !descripcion.trim()) {
+      avisarFalta("Describe qué pidió el cliente.");
+      return;
+    }
+    if (!esPedido && valorTotal <= 0) {
+      avisarFalta("Falta el valor total del apartado.");
+      return;
+    }
+    agregar({ tipo, descripcion, fecha, cliente, telefono, valorTotal, abonoInicial, metodoInicial });
+    setDescripcion("");
+    setCliente("");
+    setTelefono("");
+    setValorTotal(0);
+    setAbonoInicial(0);
+    setMetodoInicial("efectivo");
+    avisar(esPedido ? "Pedido registrado" : "Apartado registrado");
   }
 
   return (
@@ -289,20 +296,24 @@ function ApartadoCard({ apartado, onEliminar, puedeAdmin }: { apartado: Apartado
   const esPedido = apartado.tipo === "pedido";
 
   function registrarAbono() {
-    if (monto > 0) {
-      abonar(apartado.id, fechaAbono || hoyISO(), monto, metodoAbono);
-      setMonto(0);
-      setFechaAbono(hoyISO());
-      avisar("Abono registrado");
+    if (monto <= 0) {
+      avisarFalta("Escribe el monto del abono.");
+      return;
     }
+    abonar(apartado.id, fechaAbono || hoyISO(), monto, metodoAbono);
+    setMonto(0);
+    setFechaAbono(hoyISO());
+    avisar("Abono registrado");
   }
 
   function guardarEdicion() {
-    if (ed.cliente.trim()) {
-      editar(apartado.id, ed);
-      setEditando(false);
-      avisar();
+    if (!ed.cliente.trim()) {
+      avisarFalta("Falta el nombre del cliente.");
+      return;
     }
+    editar(apartado.id, ed);
+    setEditando(false);
+    avisar();
   }
 
   async function borrarAbono(abonoId: string) {

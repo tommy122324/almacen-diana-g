@@ -5,7 +5,7 @@ import { useStore, cajaAyerDe } from "@/lib/store";
 import { METODOS, METODO_LABEL, type MetodoPago } from "@/lib/types";
 import { formatCOP, formatFechaLarga } from "@/lib/format";
 import { hoyISO } from "@/lib/calc";
-import { avisar, confirmarEliminar } from "@/lib/alerta";
+import { avisar, confirmarEliminar, avisarFalta } from "@/lib/alerta";
 import { MoneyInput } from "@/components/MoneyInput";
 import { IngresosMetodoChart } from "@/components/Charts";
 import { Card, Boton, Select, Input } from "@/components/ui";
@@ -419,10 +419,12 @@ function AgregarVenta({ onAdd }: { onAdd: (m: MetodoPago, monto: number) => void
   const [metodo, setMetodo] = useState<MetodoPago>("efectivo");
   const [monto, setMonto] = useState(0);
   function add() {
-    if (monto > 0) {
-      onAdd(metodo, monto);
-      setMonto(0);
+    if (monto <= 0) {
+      avisarFalta("Escribe el monto de la venta.");
+      return;
     }
+    onAdd(metodo, monto);
+    setMonto(0);
   }
   return (
     <div className="flex flex-col gap-2 sm:flex-row">
@@ -443,11 +445,13 @@ function AgregarConcepto({ placeholder, onAdd }: { placeholder: string; onAdd: (
   const [concepto, setConcepto] = useState("");
   const [monto, setMonto] = useState(0);
   function add() {
-    if (monto > 0) {
-      onAdd(concepto, monto);
-      setConcepto("");
-      setMonto(0);
+    if (monto <= 0) {
+      avisarFalta("Escribe el monto.");
+      return;
     }
+    onAdd(concepto, monto);
+    setConcepto("");
+    setMonto(0);
   }
   return (
     <div className="flex flex-col gap-2 sm:flex-row">

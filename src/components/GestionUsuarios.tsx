@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { UserPlus, Trash2, ShieldCheck, User } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { cargarMiembros, type Miembro } from "@/lib/db";
-import { avisar, avisarError, confirmar } from "@/lib/alerta";
+import { avisar, avisarError, confirmar, avisarFalta } from "@/lib/alerta";
 import { Card, Boton, Input, Field } from "@/components/ui";
 
 export function GestionUsuarios() {
@@ -28,8 +28,12 @@ export function GestionUsuarios() {
   }, [recargar]);
 
   async function crear() {
-    if (!email.trim() || password.length < 6) {
-      avisarError("Correo válido y contraseña de al menos 6 caracteres");
+    if (!email.trim()) {
+      avisarFalta("Escribe el correo del colaborador.");
+      return;
+    }
+    if (password.length < 6) {
+      avisarFalta("La contraseña debe tener al menos 6 caracteres.");
       return;
     }
     setCreando(true);

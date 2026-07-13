@@ -24,6 +24,11 @@ export function avisarError(titulo = "Ocurrió un problema") {
   Toast.fire({ icon: "error", title: titulo });
 }
 
+/** Aviso de validación: le indica al usuario qué dato le falta llenar. */
+export function avisarFalta(titulo: string) {
+  Toast.fire({ icon: "warning", title: titulo, timer: 2600 });
+}
+
 /** Recordatorio en modal: NO se cierra solo, el usuario debe cerrarlo. */
 export function recordatorio(titulo: string, html?: string) {
   return Swal.fire({

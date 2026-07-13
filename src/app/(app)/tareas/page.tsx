@@ -13,7 +13,7 @@ import {
   type Miembro,
 } from "@/lib/db";
 import type { Tarea } from "@/lib/types";
-import { avisar, avisarError, confirmarEliminar } from "@/lib/alerta";
+import { avisar, avisarError, confirmarEliminar, avisarFalta } from "@/lib/alerta";
 import { formatFechaLarga } from "@/lib/format";
 import { hoyISO } from "@/lib/calc";
 import { Card, Boton, Input, Select, Chip, inputCls } from "@/components/ui";
@@ -174,7 +174,11 @@ function TareasAdmin() {
   const sel = empleados.find((e) => e.usuarioId === selId);
 
   async function agregar() {
-    if (!negocioId || !selId || !nueva.trim()) return;
+    if (!negocioId || !selId) return;
+    if (!nueva.trim()) {
+      avisarFalta("Escribe la tarea que vas a asignar.");
+      return;
+    }
     try {
       await insertTarea({ negocioId, usuarioId: selId, fecha, descripcion: nueva.trim() });
       setNueva("");
@@ -272,7 +276,7 @@ function TareaAdminRow({ tarea, onBorrar, onGuardarTexto }: { tarea: Tarea; onBo
           <div className="flex-1">
             <textarea className={`${inputCls} min-h-[44px] resize-y`} rows={2} value={texto} onChange={(e) => setTexto(e.target.value)} />
             <div className="mt-2 flex gap-2">
-              <Boton onClick={() => { onGuardarTexto(texto); setEditando(false); }}><Check className="h-4 w-4" /> Guardar</Boton>
+              <Boton onClick={() => { if (!texto.trim()) { avisarFalta("La tarea no puede quedar vacía."); return; } onGuardarTexto(texto); setEditando(false); }}><Check className="h-4 w-4" /> Guardar</Boton>
               <Boton variant="ghost" onClick={() => { setTexto(tarea.descripcion); setEditando(false); }}><X className="h-4 w-4" /> Cancelar</Boton>
             </div>
           </div>
