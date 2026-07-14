@@ -15,11 +15,11 @@ function primerNombre(t: string): string {
  * (no se adivina del negocio, para no confundir a un usuario con otro).
  */
 export function SaludoBienvenida() {
-  const cargado = useStore((s) => s.cargado);
+  const saludoListo = useStore((s) => s.saludoListo);
   const miNombre = useStore((s) => s.miNombre);
 
   useEffect(() => {
-    if (!cargado || typeof window === "undefined") return;
+    if (!saludoListo || typeof window === "undefined") return;
     if (sessionStorage.getItem("cb-saludado") === "1") return;
 
     const nombre = primerNombre(miNombre);
@@ -54,7 +54,7 @@ export function SaludoBienvenida() {
 
     return quitar;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cargado, miNombre]);
+  }, [saludoListo, miNombre]);
 
   return null;
 }

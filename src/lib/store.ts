@@ -64,6 +64,7 @@ interface State {
   // Rol del usuario actual en el negocio activo
   miRol: string; // "dueño" | "admin" | "empleado" | ""
   miNombre: string; // nombre del usuario actual (para el saludo)
+  saludoListo: boolean; // true SOLO tras cargar la sesión actual (no se persiste → evita saludo con nombre viejo)
   esAdmin: boolean;
 
   // Preferencia del panel (persiste al cambiar de pestaña)
@@ -171,6 +172,7 @@ export const useStore = create<State>()(
   config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 },
   miRol: "",
   miNombre: "",
+  saludoListo: false,
   esAdmin: false,
   revision: 0,
   movDesde: periodoDe("mes").desde,
@@ -261,7 +263,7 @@ export const useStore = create<State>()(
   cargarDesdeSupabase: async () => {
     // Sin conexión: usamos lo que quedó guardado en el dispositivo (no intentamos la red).
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      set({ cargando: false, cargado: true });
+      set({ cargando: false, cargado: true, saludoListo: true });
       return;
     }
     set({ cargando: true });
@@ -280,18 +282,18 @@ export const useStore = create<State>()(
         db.cargarConfig(activo),
         db.miInfo(activo),
       ]);
-      set({ negocios, negocioActivoId: activo, ...base, ...mov, movDesde: p.desde, movHasta: p.hasta, config, miRol: info.rol, miNombre: info.nombre, esAdmin: info.rol === "dueño" || info.rol === "admin", cargando: false, cargado: true });
+      set({ negocios, negocioActivoId: activo, ...base, ...mov, movDesde: p.desde, movHasta: p.hasta, config, miRol: info.rol, miNombre: info.nombre, esAdmin: info.rol === "dueño" || info.rol === "admin", cargando: false, cargado: true, saludoListo: true });
     } catch (e) {
       console.error(e);
       // Si hay datos guardados en el dispositivo, seguimos con esos (modo sin conexión).
       const hayCache = get().negocios.length > 0;
       if (!hayCache) avisarError("No se pudieron cargar los datos");
-      set({ cargando: false, cargado: true });
+      set({ cargando: false, cargado: true, saludoListo: true });
     }
   },
 
   limpiar: () =>
-    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [], gastosMensuales: [], config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 }, miRol: "", miNombre: "", esAdmin: false, movDesde: periodoDe("mes").desde, movHasta: periodoDe("mes").hasta }),
+    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [], gastosMensuales: [], config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 }, miRol: "", miNombre: "", saludoListo: false, esAdmin: false, movDesde: periodoDe("mes").desde, movHasta: periodoDe("mes").hasta }),
 
   crearNegocio: async (nombre) => {
     try {
