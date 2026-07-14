@@ -29,6 +29,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const cargarDesdeSupabase = useStore((s) => s.cargarDesdeSupabase);
   const limpiar = useStore((s) => s.limpiar);
   const negocioActivoId = useStore((s) => s.negocioActivoId);
+  const negocios = useStore((s) => s.negocios);
+  const nombreNegocio = negocios.find((n) => n.id === negocioActivoId)?.nombre ?? "Almacén";
 
   useEffect(() => {
     setDesbloqueado(sessionStorage.getItem("cb-desbloqueo") === "1");
@@ -102,7 +104,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-5 border-r border-stone-200 bg-white p-4 md:flex">
         <div className="flex items-center gap-2 px-1 pt-1">
           <span className="text-2xl">🐝</span>
-          <span className="text-lg font-bold text-stone-800">Almacén Diana G</span>
+          <span className="truncate text-lg font-bold text-stone-800">{nombreNegocio}</span>
         </div>
         <BusinessSelector />
         <Nav />
