@@ -160,6 +160,16 @@ export async function miRol(negocioId: string): Promise<string> {
   return (data?.rol as string) ?? "";
 }
 
+/** Rol y nombre del usuario actual en un negocio (para el saludo personalizado). */
+export async function miInfo(negocioId: string): Promise<{ rol: string; nombre: string; email: string }> {
+  const c = db();
+  const { data: userData } = await c.auth.getUser();
+  const uid = userData.user?.id;
+  if (!uid) return { rol: "", nombre: "", email: "" };
+  const { data } = await c.from("miembros").select("rol, nombre, email").eq("negocio_id", negocioId).eq("usuario_id", uid).maybeSingle();
+  return { rol: s(data?.rol), nombre: s(data?.nombre), email: s(data?.email) };
+}
+
 export async function crearNegocioDB(nombre: string): Promise<Negocio> {
   const c = db();
   const { data: userData } = await c.auth.getUser();

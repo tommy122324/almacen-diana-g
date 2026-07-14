@@ -63,6 +63,7 @@ interface State {
 
   // Rol del usuario actual en el negocio activo
   miRol: string; // "dueño" | "admin" | "empleado" | ""
+  miNombre: string; // nombre del usuario actual (para el saludo)
   esAdmin: boolean;
 
   // Preferencia del panel (persiste al cambiar de pestaña)
@@ -169,6 +170,7 @@ export const useStore = create<State>()(
   gastosMensuales: [],
   config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 },
   miRol: "",
+  miNombre: "",
   esAdmin: false,
   revision: 0,
   movDesde: periodoDe("mes").desde,
@@ -272,13 +274,13 @@ export const useStore = create<State>()(
       const prev = get().negocioActivoId;
       const activo = prev && negocios.some((x) => x.id === prev) ? prev : negocios[0].id;
       const p = periodoDe("mes"); // arranca con el mes actual
-      const [base, mov, config, rol] = await Promise.all([
+      const [base, mov, config, info] = await Promise.all([
         db.cargarBase(activo),
         db.cargarMovimientos(activo, p.desde, p.hasta),
         db.cargarConfig(activo),
-        db.miRol(activo),
+        db.miInfo(activo),
       ]);
-      set({ negocios, negocioActivoId: activo, ...base, ...mov, movDesde: p.desde, movHasta: p.hasta, config, miRol: rol, esAdmin: rol === "dueño" || rol === "admin", cargando: false, cargado: true });
+      set({ negocios, negocioActivoId: activo, ...base, ...mov, movDesde: p.desde, movHasta: p.hasta, config, miRol: info.rol, miNombre: info.nombre, esAdmin: info.rol === "dueño" || info.rol === "admin", cargando: false, cargado: true });
     } catch (e) {
       console.error(e);
       // Si hay datos guardados en el dispositivo, seguimos con esos (modo sin conexión).
@@ -289,7 +291,7 @@ export const useStore = create<State>()(
   },
 
   limpiar: () =>
-    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [], gastosMensuales: [], config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 }, miRol: "", esAdmin: false, movDesde: periodoDe("mes").desde, movHasta: periodoDe("mes").hasta }),
+    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [], gastosMensuales: [], config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 }, miRol: "", miNombre: "", esAdmin: false, movDesde: periodoDe("mes").desde, movHasta: periodoDe("mes").hasta }),
 
   crearNegocio: async (nombre) => {
     try {
@@ -307,13 +309,13 @@ export const useStore = create<State>()(
     set({ negocioActivoId: id, cargando: true });
     try {
       const p = periodoDe("mes");
-      const [base, mov, config, rol] = await Promise.all([
+      const [base, mov, config, info] = await Promise.all([
         db.cargarBase(id),
         db.cargarMovimientos(id, p.desde, p.hasta),
         db.cargarConfig(id),
-        db.miRol(id),
+        db.miInfo(id),
       ]);
-      set({ ...base, ...mov, movDesde: p.desde, movHasta: p.hasta, config, miRol: rol, esAdmin: rol === "dueño" || rol === "admin", cargando: false });
+      set({ ...base, ...mov, movDesde: p.desde, movHasta: p.hasta, config, miRol: info.rol, miNombre: info.nombre, esAdmin: info.rol === "dueño" || info.rol === "admin", cargando: false });
     } catch (e) {
       console.error(e);
       set({ cargando: false });
@@ -507,6 +509,7 @@ export const useStore = create<State>()(
         gastosMensuales: s.gastosMensuales,
         config: s.config,
         miRol: s.miRol,
+        miNombre: s.miNombre,
         esAdmin: s.esAdmin,
         movDesde: s.movDesde,
         movHasta: s.movHasta,

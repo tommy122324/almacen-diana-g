@@ -43,12 +43,16 @@ export function cebarVoz() {
   }
 }
 
-/** Dice en voz alta un mensaje de bienvenida amable al iniciar sesión. */
-export function reproducirBienvenida(
-  mensaje = "Hola Diana. Bienvenida a tu sistema de gestión. Que tengas un excelente día.",
-) {
+/**
+ * Dice en voz alta un mensaje de bienvenida.
+ * `onInicio` se llama cuando el audio EMPIEZA a sonar de verdad (para saber si no fue bloqueado).
+ */
+export function reproducirBienvenida(mensaje: string, onInicio?: () => void) {
   if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  let dicho = false; // evita que se diga dos veces (era la causa de que se cortara)
   const decir = () => {
+    if (dicho) return;
+    dicho = true;
     const u = new SpeechSynthesisUtterance(mensaje);
     u.lang = "es-MX";
     u.rate = 0.97; // ritmo natural
@@ -59,6 +63,7 @@ export function reproducirBienvenida(
       u.voice = voz;
       u.lang = voz.lang;
     }
+    if (onInicio) u.onstart = () => onInicio();
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   };
@@ -66,12 +71,9 @@ export function reproducirBienvenida(
     if (window.speechSynthesis.getVoices().length > 0) {
       decir();
     } else {
-      // Solo si las voces aún no cargaron (raro tras el cebado).
-      window.speechSynthesis.onvoiceschanged = () => {
-        decir();
-        window.speechSynthesis.onvoiceschanged = null;
-      };
-      setTimeout(decir, 200);
+      // Las voces aún no cargaron: dispara al primero que ocurra (sin repetir).
+      window.speechSynthesis.onvoiceschanged = () => decir();
+      setTimeout(decir, 250);
     }
   } catch {
     /* si el navegador no soporta voz, no pasa nada */

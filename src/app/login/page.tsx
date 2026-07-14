@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, LogIn } from "lucide-react";
 import { login, usuarioActual } from "@/lib/auth";
-import { reproducirBienvenida, cebarVoz } from "@/lib/voz";
+import { cebarVoz } from "@/lib/voz";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,7 +28,7 @@ export default function LoginPage() {
     const { ok } = await login(correo, clave);
     setCargando(false);
     if (ok) {
-      reproducirBienvenida(); // el clic del botón habilita el audio del navegador
+      // El saludo por voz lo hace el layout de la app (con el nombre correcto del negocio).
       router.replace("/");
     } else {
       setError("Correo o contraseña incorrectos.");

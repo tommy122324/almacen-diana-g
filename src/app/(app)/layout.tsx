@@ -16,6 +16,7 @@ import { CodigoGate } from "@/components/CodigoGate";
 import { EstadoConexion } from "@/components/EstadoConexion";
 import { SincronizadorOffline } from "@/components/SincronizadorOffline";
 import { ActualizacionDisponible } from "@/components/ActualizacionDisponible";
+import { SaludoBienvenida } from "@/components/SaludoBienvenida";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated();
@@ -68,6 +69,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   async function salir() {
     if (await confirmar("¿Cerrar sesión?", "Tendrás que volver a ingresar con tu correo y contraseña.", "Sí, cerrar sesión")) {
       sessionStorage.removeItem("cb-desbloqueo");
+      sessionStorage.removeItem("cb-saludado");
       await logout();
       limpiar();
       router.replace("/login");
@@ -100,6 +102,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <NotificacionesPedidos />
       <SincronizadorOffline />
       <ActualizacionDisponible />
+      <SaludoBienvenida />
       {/* Barra lateral (escritorio) */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-5 border-r border-stone-200 bg-white p-4 md:flex">
         <div className="flex items-center gap-2 px-1 pt-1">
