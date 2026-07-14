@@ -93,7 +93,9 @@ export default function Panel() {
     const sumGM = (p: Periodo) => filtrar(gastosMensuales, negocioId, p).reduce((s, x) => s + x.monto, 0);
     const gmPeriodo = sumGM(periodo);
     const gmPrev = sumGM(periodoPrev);
-    return { v, g, e, r, rp, serie, efectivo, apartVentas, apartVentasPrev, gmPeriodo, gmPrev };
+    // Solo los gastos mensuales en efectivo → se restan del efectivo neto.
+    const gmEfectivo = filtrar(gastosMensuales, negocioId, periodo).filter((x) => x.metodo === "efectivo").reduce((s, x) => s + x.monto, 0);
+    return { v, g, e, r, rp, serie, efectivo, apartVentas, apartVentasPrev, gmPeriodo, gmPrev, gmEfectivo };
   }, [ventas, gastos, entradas, apartados, cuadres, gastosMensuales, negocioId, periodo, periodoPrev]);
 
   // Meta del mes actual
@@ -201,7 +203,7 @@ export default function Panel() {
       {/* Tarjetas */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
         <StatCard label="Ventas" value={datos.r.totalVentas + datos.apartVentas} tone="green" hint={pctHint(datos.r.totalVentas + datos.apartVentas, datos.rp.totalVentas + datos.apartVentasPrev)} />
-        <StatCard label="Gastos" value={datos.r.totalGastos} tone="red" hint={pctHint(datos.r.totalGastos, datos.rp.totalGastos)} />
+        <StatCard label="Gastos" value={datos.r.totalGastos + datos.gmPeriodo} tone="red" hint={datos.gmPeriodo > 0 ? `incluye ${formatCOP(datos.gmPeriodo)} de gastos mensuales` : pctHint(datos.r.totalGastos, datos.rp.totalGastos)} />
         <StatCard label="Entradas" value={datos.r.totalEntradas} tone="default" />
         <StatCard
           label="Utilidad total"
@@ -212,9 +214,9 @@ export default function Panel() {
         {esAdmin && (
           <StatCard
             label="Efectivo neto total"
-            value={datos.efectivo.efectivoNeto}
-            tone={datos.efectivo.efectivoNeto >= 0 ? "green" : "red"}
-            hint={`(esperado en efectivo: ${formatCOP(datos.efectivo.esperadoEfectivo)})`}
+            value={datos.efectivo.efectivoNeto - datos.gmEfectivo}
+            tone={datos.efectivo.efectivoNeto - datos.gmEfectivo >= 0 ? "green" : "red"}
+            hint={`(esperado en efectivo: ${formatCOP(datos.efectivo.esperadoEfectivo - datos.gmEfectivo)})`}
           />
         )}
         <StatCard label="Abonos de apartados" value={datos.r.totalAbonos} tone="default" />

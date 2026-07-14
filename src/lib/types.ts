@@ -68,6 +68,17 @@ export interface Entrada {
   creadoEn: string;
 }
 
+/** Método de pago de un gasto mensual. */
+export type MetodoGasto = "efectivo" | "nequi" | "daviplata" | "otros";
+
+export const METODOS_GASTO: MetodoGasto[] = ["efectivo", "nequi", "daviplata", "otros"];
+export const METODO_GASTO_LABEL: Record<MetodoGasto, string> = {
+  efectivo: "Efectivo",
+  nequi: "Nequi",
+  daviplata: "DaviPlata",
+  otros: "Otros",
+};
+
 /** Gasto mensual / fijo (arriendo, servicios, etc.). Solo admin. Resta a la utilidad del mes. */
 export interface GastoMensual {
   id: string;
@@ -75,6 +86,8 @@ export interface GastoMensual {
   fecha: string;
   concepto: string;
   monto: number;
+  metodo: MetodoGasto;
+  metodoOtro?: string; // nombre cuando metodo === "otros"
   creadoEn: string;
 }
 

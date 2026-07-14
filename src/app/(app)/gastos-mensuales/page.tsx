@@ -2,13 +2,19 @@
 import { useMemo, useState } from "react";
 import { Receipt, Plus, Trash2, Pencil, Check, X, Search, FileText, Lock } from "lucide-react";
 import { useStore } from "@/lib/store";
-import type { GastoMensual } from "@/lib/types";
+import { type GastoMensual, type MetodoGasto, METODOS_GASTO, METODO_GASTO_LABEL } from "@/lib/types";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { hoyISO, periodoDe } from "@/lib/calc";
 import { avisar, avisarFalta, confirmarEliminar } from "@/lib/alerta";
 import { exportarGastosMensualesPDF } from "@/lib/export";
 import { MoneyInput } from "@/components/MoneyInput";
-import { Card, Boton, Input, Field, StatCard, inputCls } from "@/components/ui";
+import { Card, Boton, Input, Field, StatCard, Select, inputCls } from "@/components/ui";
+
+/** Etiqueta del método (muestra el nombre de "otros" si lo hay). */
+function metodoLabel(g: GastoMensual): string {
+  if (g.metodo === "otros") return g.metodoOtro?.trim() || "Otros";
+  return METODO_GASTO_LABEL[g.metodo];
+}
 
 export default function GastosMensuales() {
   const esAdmin = useStore((s) => s.esAdmin);
@@ -25,6 +31,8 @@ export default function GastosMensuales() {
   const [concepto, setConcepto] = useState("");
   const [monto, setMonto] = useState(0);
   const [fecha, setFecha] = useState(hoyISO());
+  const [metodo, setMetodo] = useState<MetodoGasto>("efectivo");
+  const [metodoOtro, setMetodoOtro] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [desde, setDesde] = useState(mes.desde);
   const [hasta, setHasta] = useState(mes.hasta);
@@ -47,10 +55,16 @@ export default function GastosMensuales() {
       avisarFalta("Escribe el concepto (¿de qué es el gasto?).");
       return;
     }
-    agregar(fecha, concepto, monto);
+    if (metodo === "otros" && !metodoOtro.trim()) {
+      avisarFalta("Escribe con qué se pagó (opción Otros).");
+      return;
+    }
+    agregar(fecha, concepto, monto, metodo, metodoOtro);
     setConcepto("");
     setMonto(0);
     setFecha(hoyISO());
+    setMetodo("efectivo");
+    setMetodoOtro("");
     avisar("Gasto mensual registrado");
   }
 
@@ -92,12 +106,27 @@ export default function GastosMensuales() {
           <Field label="Fecha del gasto">
             <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
           </Field>
+          <Field label="¿Con qué se pagó?">
+            <Select value={metodo} onChange={(e) => setMetodo(e.target.value as MetodoGasto)}>
+              {METODOS_GASTO.map((m) => (
+                <option key={m} value={m}>{METODO_GASTO_LABEL[m]}</option>
+              ))}
+            </Select>
+          </Field>
+          {metodo === "otros" && (
+            <Field label="¿Cuál otro? (especifica)">
+              <Input value={metodoOtro} onChange={(e) => setMetodoOtro(e.target.value)} placeholder="Ej: Transferencia Bancolombia" />
+            </Field>
+          )}
           <div className="flex items-end">
             <Boton onClick={add} className="w-full sm:w-auto">
               <Plus className="h-4 w-4" /> Registrar
             </Boton>
           </div>
         </div>
+        <p className="mt-2 text-xs text-stone-500">
+          Si es <b>efectivo</b>, se resta también del <b>efectivo neto</b> del mes. Los demás métodos restan solo de la utilidad.
+        </p>
       </Card>
 
       {/* Filtros + PDF */}
@@ -141,7 +170,7 @@ export default function GastosMensuales() {
         <div className="space-y-1">
           {lista.length === 0 && <p className="px-2 py-1 text-sm text-stone-400">No hay gastos en este rango.</p>}
           {lista.map((g) => (
-            <FilaGasto key={g.id} gasto={g} onEditar={(f, c, m) => { editar(g.id, f, c, m); avisar(); }} onEliminar={() => borrar(g)} />
+            <FilaGasto key={g.id} gasto={g} onEditar={(f, c, m, met, otro) => { editar(g.id, f, c, m, met, otro); avisar(); }} onEliminar={() => borrar(g)} />
           ))}
         </div>
       </Card>
@@ -155,14 +184,24 @@ function FilaGasto({
   onEliminar,
 }: {
   gasto: GastoMensual;
-  onEditar: (fecha: string, concepto: string, monto: number) => void;
+  onEditar: (fecha: string, concepto: string, monto: number, metodo: MetodoGasto, metodoOtro: string) => void;
   onEliminar: () => void;
 }) {
   const [editando, setEditando] = useState(false);
   const [c, setC] = useState(gasto.concepto);
   const [m, setM] = useState(gasto.monto);
   const [f, setF] = useState(gasto.fecha);
+  const [met, setMet] = useState<MetodoGasto>(gasto.metodo);
+  const [otro, setOtro] = useState(gasto.metodoOtro ?? "");
 
+  function reset() {
+    setC(gasto.concepto);
+    setM(gasto.monto);
+    setF(gasto.fecha);
+    setMet(gasto.metodo);
+    setOtro(gasto.metodoOtro ?? "");
+    setEditando(false);
+  }
   function guardar() {
     if (m <= 0) {
       avisarFalta("Escribe el monto del gasto.");
@@ -172,19 +211,33 @@ function FilaGasto({
       avisarFalta("Escribe el concepto.");
       return;
     }
-    onEditar(f, c, m);
+    if (met === "otros" && !otro.trim()) {
+      avisarFalta("Escribe con qué se pagó (opción Otros).");
+      return;
+    }
+    onEditar(f, c, m, met, otro);
     setEditando(false);
   }
 
   if (editando) {
     return (
-      <div className="flex flex-col gap-2 rounded-xl bg-rose-50 p-2 sm:flex-row sm:items-center">
-        <Input value={c} onChange={(e) => setC(e.target.value)} className="flex-1" />
-        <Input type="date" value={f} onChange={(e) => setF(e.target.value)} className="w-auto" />
-        <MoneyInput value={m} onChange={setM} className="sm:w-40" onEnter={guardar} />
-        <div className="flex gap-1">
-          <Boton onClick={guardar}><Check className="h-4 w-4" /></Boton>
-          <Boton variant="ghost" onClick={() => { setC(gasto.concepto); setM(gasto.monto); setF(gasto.fecha); setEditando(false); }}><X className="h-4 w-4" /></Boton>
+      <div className="flex flex-col gap-2 rounded-xl bg-rose-50 p-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Input value={c} onChange={(e) => setC(e.target.value)} className="flex-1" />
+          <Input type="date" value={f} onChange={(e) => setF(e.target.value)} className="w-auto" />
+          <MoneyInput value={m} onChange={setM} className="sm:w-36" onEnter={guardar} />
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Select value={met} onChange={(e) => setMet(e.target.value as MetodoGasto)} className="sm:w-40">
+            {METODOS_GASTO.map((x) => (
+              <option key={x} value={x}>{METODO_GASTO_LABEL[x]}</option>
+            ))}
+          </Select>
+          {met === "otros" && <Input value={otro} onChange={(e) => setOtro(e.target.value)} placeholder="¿Cuál otro?" className="flex-1" />}
+          <div className="ml-auto flex gap-1">
+            <Boton onClick={guardar}><Check className="h-4 w-4" /></Boton>
+            <Boton variant="ghost" onClick={reset}><X className="h-4 w-4" /></Boton>
+          </div>
         </div>
       </div>
     );
@@ -194,6 +247,7 @@ function FilaGasto({
     <div className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-stone-50">
       <span className="w-20 shrink-0 text-stone-400">{formatFechaCorta(gasto.fecha)}</span>
       <span className="flex-1 text-stone-700">{gasto.concepto}</span>
+      <span className="hidden rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500 sm:inline">{metodoLabel(gasto)}</span>
       <span className="tabular-nums font-medium text-rose-600">{formatCOP(gasto.monto)}</span>
       <button onClick={() => setEditando(true)} className="text-stone-300 hover:text-amber-600" title="Editar"><Pencil className="h-4 w-4" /></button>
       <button onClick={onEliminar} className="text-stone-300 hover:text-rose-500" title="Eliminar"><Trash2 className="h-4 w-4" /></button>

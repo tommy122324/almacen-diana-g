@@ -10,6 +10,7 @@ import type {
   Gasto,
   Entrada,
   GastoMensual,
+  MetodoGasto,
   Apartado,
   Abono,
   Meta,
@@ -73,7 +74,16 @@ function mEntrada(r: Row): Entrada {
   return { id: s(r.id), negocioId: s(r.negocio_id), fecha: s(r.fecha), concepto: s(r.concepto), monto: n(r.monto), creadoEn: s(r.creado_en) };
 }
 function mGastoMensual(r: Row): GastoMensual {
-  return { id: s(r.id), negocioId: s(r.negocio_id), fecha: s(r.fecha), concepto: s(r.concepto), monto: n(r.monto), creadoEn: s(r.creado_en) };
+  return {
+    id: s(r.id),
+    negocioId: s(r.negocio_id),
+    fecha: s(r.fecha),
+    concepto: s(r.concepto),
+    monto: n(r.monto),
+    metodo: (r.metodo as MetodoGasto) ?? "efectivo",
+    metodoOtro: r.metodo_otro ? s(r.metodo_otro) : undefined,
+    creadoEn: s(r.creado_en),
+  };
 }
 function mAbono(r: Row): Abono {
   return { id: s(r.id), fecha: s(r.fecha), monto: n(r.monto), metodo: (r.metodo as MetodoPago) ?? "efectivo" };

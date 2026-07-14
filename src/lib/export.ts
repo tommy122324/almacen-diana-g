@@ -281,16 +281,17 @@ export async function exportarGastosMensualesPDF(d: {
   doc.text(`${d.negocio} · ${formatFechaCorta(d.desde)} a ${formatFechaCorta(d.hasta)}`, M, 25);
   doc.setTextColor(0);
 
+  const metLabel = (g: GastoMensual) => (g.metodo === "otros" ? g.metodoOtro?.trim() || "Otros" : { efectivo: "Efectivo", nequi: "Nequi", daviplata: "DaviPlata" }[g.metodo] ?? g.metodo);
   const total = d.items.reduce((s, g) => s + g.monto, 0);
   autoTable(doc, {
     startY: 31,
-    head: [["Fecha", "Concepto", "Monto"]],
-    body: d.items.map((g) => [formatFechaCorta(g.fecha), g.concepto, formatCOP(g.monto)]),
-    foot: [["", "Total", formatCOP(total)]],
+    head: [["Fecha", "Concepto", "Método", "Monto"]],
+    body: d.items.map((g) => [formatFechaCorta(g.fecha), g.concepto, metLabel(g), formatCOP(g.monto)]),
+    foot: [["", "", "Total", formatCOP(total)]],
     theme: "striped",
     headStyles: { fillColor: [225, 29, 72] },
     footStyles: { fillColor: [254, 226, 226], textColor: 0, fontStyle: "bold" },
-    columnStyles: { 2: { halign: "right" } },
+    columnStyles: { 3: { halign: "right" } },
     margin: { left: M, right: M },
   });
 

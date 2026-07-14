@@ -19,6 +19,7 @@ import type {
   Cuadre,
   Configuracion,
   MetodoPago,
+  MetodoGasto,
   TipoApartado,
   OpPendiente,
 } from "./types";
@@ -125,8 +126,8 @@ interface State {
   setMeta: (anio: number, mes: number, montoMeta: number) => Promise<void>;
   setCuadre: (fecha: string, patch: { efectivoReal?: number; cuadrado?: boolean | null; diferencia?: number }) => Promise<void>;
 
-  agregarGastoMensual: (fecha: string, concepto: string, monto: number) => Promise<void>;
-  editarGastoMensual: (id: string, fecha: string, concepto: string, monto: number) => Promise<void>;
+  agregarGastoMensual: (fecha: string, concepto: string, monto: number, metodo: MetodoGasto, metodoOtro: string) => Promise<void>;
+  editarGastoMensual: (id: string, fecha: string, concepto: string, monto: number, metodo: MetodoGasto, metodoOtro: string) => Promise<void>;
   eliminarGastoMensual: (id: string) => Promise<void>;
 }
 
@@ -468,20 +469,22 @@ export const useStore = create<State>()(
   },
 
   // ---------- Gastos mensuales (solo admin) ----------
-  agregarGastoMensual: async (fecha, concepto, monto) => {
+  agregarGastoMensual: async (fecha, concepto, monto, metodo, metodoOtro) => {
     const negocioId = get().negocioActivoId;
     if (!negocioId || monto <= 0) return;
     const c = concepto.trim() || "Gasto mensual";
+    const otro = metodo === "otros" ? metodoOtro.trim() : "";
     const id = uuid();
-    const gm: GastoMensual = { id, negocioId, fecha, concepto: c, monto, creadoEn: new Date().toISOString() };
+    const gm: GastoMensual = { id, negocioId, fecha, concepto: c, monto, metodo, metodoOtro: otro || undefined, creadoEn: new Date().toISOString() };
     set((s) => ({ gastosMensuales: [...s.gastosMensuales, gm] }));
-    get().encolar({ tabla: "gastos_mensuales", tipo: "insert", payload: { id, negocio_id: negocioId, fecha, concepto: c, monto } });
+    get().encolar({ tabla: "gastos_mensuales", tipo: "insert", payload: { id, negocio_id: negocioId, fecha, concepto: c, monto, metodo, metodo_otro: otro || null } });
   },
-  editarGastoMensual: async (id, fecha, concepto, monto) => {
+  editarGastoMensual: async (id, fecha, concepto, monto, metodo, metodoOtro) => {
     if (monto <= 0) return;
     const c = concepto.trim() || "Gasto mensual";
-    set((s) => ({ gastosMensuales: s.gastosMensuales.map((g) => (g.id === id ? { ...g, fecha, concepto: c, monto } : g)) }));
-    get().encolar({ tabla: "gastos_mensuales", tipo: "update", payload: { id, patch: { fecha, concepto: c, monto } } });
+    const otro = metodo === "otros" ? metodoOtro.trim() : "";
+    set((s) => ({ gastosMensuales: s.gastosMensuales.map((g) => (g.id === id ? { ...g, fecha, concepto: c, monto, metodo, metodoOtro: otro || undefined } : g)) }));
+    get().encolar({ tabla: "gastos_mensuales", tipo: "update", payload: { id, patch: { fecha, concepto: c, monto, metodo, metodo_otro: otro || null } } });
   },
   eliminarGastoMensual: async (id) => {
     set((s) => ({ gastosMensuales: s.gastosMensuales.filter((g) => g.id !== id) }));

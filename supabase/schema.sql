@@ -581,9 +581,14 @@ create table if not exists public.gastos_mensuales (
   fecha       date not null,
   concepto    text not null,
   monto       bigint not null check (monto >= 0),
+  metodo      text not null default 'efectivo', -- efectivo | nequi | daviplata | otros
+  metodo_otro text,                              -- nombre cuando metodo = 'otros'
   creado_por  uuid references auth.users(id),
   creado_en   timestamptz not null default now()
 );
+-- Por si la tabla ya existía sin estas columnas:
+alter table public.gastos_mensuales add column if not exists metodo text not null default 'efectivo';
+alter table public.gastos_mensuales add column if not exists metodo_otro text;
 create index if not exists idx_gastos_mensuales_neg on public.gastos_mensuales(negocio_id, fecha);
 alter table public.gastos_mensuales enable row level security;
 -- Solo el admin (dueño/admin) puede ver y administrar los gastos mensuales.
