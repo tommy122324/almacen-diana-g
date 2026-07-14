@@ -30,7 +30,8 @@ export function SaludoBienvenida() {
 
     const nombreNegocio = negocios.find((n) => n.id === activoId)?.nombre ?? "";
     const nombre = primerNombre(miNombre) || nombreDesdeNegocio(nombreNegocio);
-    const mensaje = nombre ? `Hola ${nombre}, bienvenida a tu sistema.` : "Hola, bienvenida a tu sistema.";
+    const saludo = nombre ? `Hola ${nombre}, bienvenida a tu sistema.` : "Hola, bienvenida a tu sistema.";
+    const mensaje = `${saludo} Espero que tengas un excelente día y vendas mucho.`;
 
     let hecho = false;
     const marcar = () => {
