@@ -9,6 +9,7 @@ import type {
   Venta,
   Gasto,
   Entrada,
+  GastoMensual,
   Apartado,
   Abono,
   Meta,
@@ -69,6 +70,9 @@ function mGasto(r: Row): Gasto {
   };
 }
 function mEntrada(r: Row): Entrada {
+  return { id: s(r.id), negocioId: s(r.negocio_id), fecha: s(r.fecha), concepto: s(r.concepto), monto: n(r.monto), creadoEn: s(r.creado_en) };
+}
+function mGastoMensual(r: Row): GastoMensual {
   return { id: s(r.id), negocioId: s(r.negocio_id), fecha: s(r.fecha), concepto: s(r.concepto), monto: n(r.monto), creadoEn: s(r.creado_en) };
 }
 function mAbono(r: Row): Abono {
@@ -173,6 +177,7 @@ export interface Base {
   apartados: Apartado[];
   metas: Meta[];
   cuadres: Cuadre[];
+  gastosMensuales: GastoMensual[];
 }
 export interface Movimientos {
   ventas: Venta[];
@@ -190,10 +195,19 @@ export async function cargarBase(negocioId: string): Promise<Base> {
   for (const r of [apartados, metas, cuadres]) {
     if (r.error) throw r.error;
   }
+  // Gastos mensuales: tolerante a que la tabla aún no exista (no rompe la carga).
+  let gastosMensuales: GastoMensual[] = [];
+  try {
+    const gm = await c.from("gastos_mensuales").select("*").eq("negocio_id", negocioId);
+    if (!gm.error) gastosMensuales = (gm.data ?? []).map(mGastoMensual);
+  } catch {
+    /* la tabla aún no se ha creado */
+  }
   return {
     apartados: (apartados.data ?? []).map(mApartado),
     metas: (metas.data ?? []).map(mMeta),
     cuadres: (cuadres.data ?? []).map(mCuadre),
+    gastosMensuales,
   };
 }
 

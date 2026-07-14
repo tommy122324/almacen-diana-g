@@ -2,7 +2,7 @@
 // Las librerías pesadas (exceljs, jspdf) se cargan SOLO al exportar (import dinámico),
 // para que la app inicie más liviana y rápida.
 import { METODOS, METODO_LABEL } from "./types";
-import type { Venta, Gasto, Entrada, Apartado, RegistroHora } from "./types";
+import type { Venta, Gasto, Entrada, Apartado, RegistroHora, GastoMensual } from "./types";
 import type { Resumen, Periodo } from "./calc";
 import { variacion } from "./calc";
 import { formatCOP, formatFechaCorta } from "./format";
@@ -261,6 +261,40 @@ export async function exportarNominaPDF(d: {
   }
 
   doc.save(`Nomina_${d.empleado.replace(/[^\w]+/g, "_")}_${d.mesLabel.replace(/[^\w]+/g, "_")}.pdf`);
+}
+
+/** PDF de gastos mensuales en un rango de fechas. */
+export async function exportarGastosMensualesPDF(d: {
+  negocio: string;
+  desde: string;
+  hasta: string;
+  items: GastoMensual[];
+}) {
+  const { default: jsPDF } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
+  const doc = new jsPDF();
+  const M = 14;
+  doc.setFontSize(16);
+  doc.text("Gastos Mensuales", M, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text(`${d.negocio} · ${formatFechaCorta(d.desde)} a ${formatFechaCorta(d.hasta)}`, M, 25);
+  doc.setTextColor(0);
+
+  const total = d.items.reduce((s, g) => s + g.monto, 0);
+  autoTable(doc, {
+    startY: 31,
+    head: [["Fecha", "Concepto", "Monto"]],
+    body: d.items.map((g) => [formatFechaCorta(g.fecha), g.concepto, formatCOP(g.monto)]),
+    foot: [["", "Total", formatCOP(total)]],
+    theme: "striped",
+    headStyles: { fillColor: [225, 29, 72] },
+    footStyles: { fillColor: [254, 226, 226], textColor: 0, fontStyle: "bold" },
+    columnStyles: { 2: { halign: "right" } },
+    margin: { left: M, right: M },
+  });
+
+  doc.save(`Gastos_Mensuales_${d.negocio.replace(/[^\w]+/g, "_")}_${d.desde}_a_${d.hasta}.pdf`);
 }
 
 /** PDF con la lista de pedidos. */

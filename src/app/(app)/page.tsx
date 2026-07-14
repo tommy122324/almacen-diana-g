@@ -53,6 +53,7 @@ export default function Panel() {
   const apartados = useStore((s) => s.apartados);
   const cuadres = useStore((s) => s.cuadres);
   const metas = useStore((s) => s.metas);
+  const gastosMensuales = useStore((s) => s.gastosMensuales);
   const setMeta = useStore((s) => s.setMeta);
 
   const periodo = useMemo<Periodo>(
@@ -88,8 +89,12 @@ export default function Panel() {
       filtrar(apartados, negocioId, p).filter((a) => a.tipo === "apartado").reduce((s, a) => s + a.valorTotal, 0);
     const apartVentas = sumApart(periodo);
     const apartVentasPrev = sumApart(periodoPrev);
-    return { v, g, e, r, rp, serie, efectivo, apartVentas, apartVentasPrev };
-  }, [ventas, gastos, entradas, apartados, cuadres, negocioId, periodo, periodoPrev]);
+    // Gastos mensuales del periodo → se restan de la utilidad total.
+    const sumGM = (p: Periodo) => filtrar(gastosMensuales, negocioId, p).reduce((s, x) => s + x.monto, 0);
+    const gmPeriodo = sumGM(periodo);
+    const gmPrev = sumGM(periodoPrev);
+    return { v, g, e, r, rp, serie, efectivo, apartVentas, apartVentasPrev, gmPeriodo, gmPrev };
+  }, [ventas, gastos, entradas, apartados, cuadres, gastosMensuales, negocioId, periodo, periodoPrev]);
 
   // Meta del mes actual
   const hoy = new Date();
@@ -110,6 +115,9 @@ export default function Panel() {
 
   const varVentas = variacion(datos.r.totalVentas, datos.rp.totalVentas);
   const labelP = LABEL_PERIODO[tipo];
+  // Utilidad total ya con los gastos mensuales restados.
+  const utilidadNeta = datos.r.utilidad - datos.gmPeriodo;
+  const utilidadNetaPrev = datos.rp.utilidad - datos.gmPrev;
 
   // Resumen automático (mensajes genéricos, en tercera persona)
   const insights = useMemo(() => {
@@ -133,17 +141,17 @@ export default function Panel() {
       const pct = datos.r.totalVentas > 0 ? (top[1] / datos.r.totalVentas) * 100 : 0;
       out.push({ emoji: "💳", texto: `Método más usado: ${METODO_LABEL[top[0]]} (${pct.toFixed(0)}% de las ventas).` });
     }
-    // Utilidad
+    // Utilidad (ya con gastos mensuales restados)
     out.push({
-      emoji: datos.r.utilidad >= 0 ? "✅" : "⚠️",
-      texto: `Utilidad del ${labelP}: ${formatCOP(datos.r.utilidad)}.`,
+      emoji: utilidadNeta >= 0 ? "✅" : "⚠️",
+      texto: `Utilidad del ${labelP}: ${formatCOP(utilidadNeta)}${datos.gmPeriodo > 0 ? ` (ya con ${formatCOP(datos.gmPeriodo)} de gastos mensuales)` : ""}.`,
     });
     // Apartados
     if (porCobrar > 0) out.push({ emoji: "📦", texto: `Apartados por cobrar: ${formatCOP(porCobrar)}.` });
     // Meta
     if (meta && meta.montoMeta > 0) out.push({ emoji: "🎯", texto: `Meta del mes: ${progresoMeta.toFixed(0)}% alcanzado.` });
     return out;
-  }, [datos, varVentas, labelP, tipo, porCobrar, meta, progresoMeta]);
+  }, [datos, varVentas, labelP, tipo, porCobrar, meta, progresoMeta, utilidadNeta]);
 
   function pctHint(actual: number, anterior: number): string | undefined {
     const v = variacion(actual, anterior);
@@ -197,9 +205,9 @@ export default function Panel() {
         <StatCard label="Entradas" value={datos.r.totalEntradas} tone="default" />
         <StatCard
           label="Utilidad total"
-          value={datos.r.utilidad}
-          tone={datos.r.utilidad >= 0 ? "amber" : "red"}
-          hint={pctHint(datos.r.utilidad, datos.rp.utilidad)}
+          value={utilidadNeta}
+          tone={utilidadNeta >= 0 ? "amber" : "red"}
+          hint={datos.gmPeriodo > 0 ? `menos ${formatCOP(datos.gmPeriodo)} de gastos mensuales` : pctHint(utilidadNeta, utilidadNetaPrev)}
         />
         {esAdmin && (
           <StatCard

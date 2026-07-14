@@ -12,6 +12,7 @@ import type {
   Venta,
   Gasto,
   Entrada,
+  GastoMensual,
   Apartado,
   Abono,
   Meta,
@@ -55,6 +56,7 @@ interface State {
   apartados: Apartado[];
   metas: Meta[];
   cuadres: Cuadre[];
+  gastosMensuales: GastoMensual[];
   config: Configuracion;
   setConfig: (patch: Partial<Configuracion>) => Promise<void>;
 
@@ -122,6 +124,10 @@ interface State {
 
   setMeta: (anio: number, mes: number, montoMeta: number) => Promise<void>;
   setCuadre: (fecha: string, patch: { efectivoReal?: number; cuadrado?: boolean | null; diferencia?: number }) => Promise<void>;
+
+  agregarGastoMensual: (fecha: string, concepto: string, monto: number) => Promise<void>;
+  editarGastoMensual: (id: string, fecha: string, concepto: string, monto: number) => Promise<void>;
+  eliminarGastoMensual: (id: string) => Promise<void>;
 }
 
 // Cola para que las peticiones de rango no compitan entre sí (Panel, comparativo, etc.).
@@ -159,6 +165,7 @@ export const useStore = create<State>()(
   apartados: [],
   metas: [],
   cuadres: [],
+  gastosMensuales: [],
   config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 },
   miRol: "",
   esAdmin: false,
@@ -281,7 +288,7 @@ export const useStore = create<State>()(
   },
 
   limpiar: () =>
-    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [], config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 }, miRol: "", esAdmin: false, movDesde: periodoDe("mes").desde, movHasta: periodoDe("mes").hasta }),
+    set({ cargado: false, negocios: [], negocioActivoId: null, ventas: [], gastos: [], entradas: [], apartados: [], metas: [], cuadres: [], gastosMensuales: [], config: { whatsapp: "", correoCodigos: "", salarioMinimo: 0 }, miRol: "", esAdmin: false, movDesde: periodoDe("mes").desde, movHasta: periodoDe("mes").hasta }),
 
   crearNegocio: async (nombre) => {
     try {
@@ -459,6 +466,27 @@ export const useStore = create<State>()(
     set((s) => ({ cuadres: [...s.cuadres.filter((c) => !(c.negocioId === negocioId && c.fecha === fecha)), cuadre] }));
     get().encolar({ tabla: "cuadres", tipo: "upsert", onConflict: "negocio_id,fecha", payload: { negocio_id: negocioId, fecha, efectivo_real: cuadre.efectivoReal, cuadrado: cuadre.cuadrado, diferencia: cuadre.diferencia } });
   },
+
+  // ---------- Gastos mensuales (solo admin) ----------
+  agregarGastoMensual: async (fecha, concepto, monto) => {
+    const negocioId = get().negocioActivoId;
+    if (!negocioId || monto <= 0) return;
+    const c = concepto.trim() || "Gasto mensual";
+    const id = uuid();
+    const gm: GastoMensual = { id, negocioId, fecha, concepto: c, monto, creadoEn: new Date().toISOString() };
+    set((s) => ({ gastosMensuales: [...s.gastosMensuales, gm] }));
+    get().encolar({ tabla: "gastos_mensuales", tipo: "insert", payload: { id, negocio_id: negocioId, fecha, concepto: c, monto } });
+  },
+  editarGastoMensual: async (id, fecha, concepto, monto) => {
+    if (monto <= 0) return;
+    const c = concepto.trim() || "Gasto mensual";
+    set((s) => ({ gastosMensuales: s.gastosMensuales.map((g) => (g.id === id ? { ...g, fecha, concepto: c, monto } : g)) }));
+    get().encolar({ tabla: "gastos_mensuales", tipo: "update", payload: { id, patch: { fecha, concepto: c, monto } } });
+  },
+  eliminarGastoMensual: async (id) => {
+    set((s) => ({ gastosMensuales: s.gastosMensuales.filter((g) => g.id !== id) }));
+    get().encolar({ tabla: "gastos_mensuales", tipo: "delete", payload: { id } });
+  },
     }),
     {
       name: "almacen-store",
@@ -473,6 +501,7 @@ export const useStore = create<State>()(
         apartados: s.apartados,
         metas: s.metas,
         cuadres: s.cuadres,
+        gastosMensuales: s.gastosMensuales,
         config: s.config,
         miRol: s.miRol,
         esAdmin: s.esAdmin,

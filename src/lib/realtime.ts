@@ -16,6 +16,7 @@ const TABLAS = [
   "registros_hora",
   "configuracion",
   "tareas",
+  "gastos_mensuales",
 ];
 
 /**

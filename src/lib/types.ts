@@ -68,6 +68,16 @@ export interface Entrada {
   creadoEn: string;
 }
 
+/** Gasto mensual / fijo (arriendo, servicios, etc.). Solo admin. Resta a la utilidad del mes. */
+export interface GastoMensual {
+  id: string;
+  negocioId: string;
+  fecha: string;
+  concepto: string;
+  monto: number;
+  creadoEn: string;
+}
+
 export interface Abono {
   id: string;
   fecha: string;

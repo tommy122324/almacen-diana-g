@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, LogOut, FileBarChart, Settings } from "lucide-react";
+import { User, LogOut, FileBarChart, Settings, Receipt } from "lucide-react";
 import { useStore } from "@/lib/store";
 
 /** Botón de perfil (celular): abre Reportes, Ajustes y Cerrar sesión. */
@@ -35,6 +35,9 @@ export function PerfilMenu({ onSalir }: { onSalir: () => void }) {
         <div className="absolute right-0 top-11 z-40 w-48 overflow-hidden rounded-xl border border-stone-200 bg-white py-1 shadow-lg">
           {esAdmin && (
             <>
+              <Link href="/gastos-mensuales" onClick={() => setAbierto(false)} className={`${item} ${path === "/gastos-mensuales" ? "text-amber-700" : "text-stone-600"}`}>
+                <Receipt className="h-4 w-4" /> Gastos Mensuales
+              </Link>
               <Link href="/reportes" onClick={() => setAbierto(false)} className={`${item} ${path === "/reportes" ? "text-amber-700" : "text-stone-600"}`}>
                 <FileBarChart className="h-4 w-4" /> Reportes
               </Link>

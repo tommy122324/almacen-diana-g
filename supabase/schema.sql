@@ -573,6 +573,32 @@ do $$ begin
 end $$;
 
 -- ============================================================
+-- FASE 7f — Gastos mensuales (fijos) · solo admin
+-- ============================================================
+create table if not exists public.gastos_mensuales (
+  id          uuid primary key default gen_random_uuid(),
+  negocio_id  uuid not null references public.negocios(id) on delete cascade,
+  fecha       date not null,
+  concepto    text not null,
+  monto       bigint not null check (monto >= 0),
+  creado_por  uuid references auth.users(id),
+  creado_en   timestamptz not null default now()
+);
+create index if not exists idx_gastos_mensuales_neg on public.gastos_mensuales(negocio_id, fecha);
+alter table public.gastos_mensuales enable row level security;
+-- Solo el admin (dueño/admin) puede ver y administrar los gastos mensuales.
+drop policy if exists gm_admin on public.gastos_mensuales;
+create policy gm_admin on public.gastos_mensuales for all
+  using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
+
+-- Realtime para gastos mensuales
+do $$ begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'gastos_mensuales') then
+    alter publication supabase_realtime add table public.gastos_mensuales;
+  end if;
+end $$;
+
+-- ============================================================
 -- Permisos para el rol de la app (la seguridad real la pone RLS)
 -- ============================================================
 grant usage on schema public to anon, authenticated;
