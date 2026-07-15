@@ -17,6 +17,7 @@ export default function Reportes() {
   const gastos = useStore((s) => s.gastos);
   const entradas = useStore((s) => s.entradas);
   const apartados = useStore((s) => s.apartados);
+  const gastosMensuales = useStore((s) => s.gastosMensuales);
 
   const [periodo, setPeriodo] = useState<Periodo>(periodoDe("mes"));
   const [etiqueta, setEtiqueta] = useState("Mes actual");
@@ -36,11 +37,16 @@ export default function Reportes() {
 
   const datos = useMemo(() => {
     const v = filtrar(ventas, negocioId, periodo).filter((x) => metodosSel.has(x.metodo));
-    const g = incluirGastos ? filtrar(gastos, negocioId, periodo) : [];
+    const gDiarios = incluirGastos ? filtrar(gastos, negocioId, periodo) : [];
+    // Los gastos mensuales del periodo también cuentan (para que cuadre con el panel).
+    const gMensuales = incluirGastos
+      ? filtrar(gastosMensuales, negocioId, periodo).map((x) => ({ id: x.id, negocioId: x.negocioId, fecha: x.fecha, concepto: x.concepto, monto: x.monto, creadoEn: x.creadoEn }))
+      : [];
+    const g = [...gDiarios, ...gMensuales];
     const e = incluirEntradas ? filtrar(entradas, negocioId, periodo) : [];
     const ab = incluirAbonos ? abonosEnPeriodo(apartados, negocioId, periodo) : 0;
     return { v, g, e, r: resumen(v, g, e, ab), serie: serieDiaria(v, g, e, periodo) };
-  }, [ventas, gastos, entradas, apartados, negocioId, periodo, metodosSel, incluirGastos, incluirEntradas, incluirAbonos]);
+  }, [ventas, gastos, gastosMensuales, entradas, apartados, negocioId, periodo, metodosSel, incluirGastos, incluirEntradas, incluirAbonos]);
 
   function elegir(tipo: "mes" | "semana" | "dia", label: string) {
     setPeriodo(periodoDe(tipo));

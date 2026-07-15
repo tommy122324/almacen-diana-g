@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Receipt, Plus, Trash2, Pencil, Check, X, Search, FileText, Lock } from "lucide-react";
+import { Receipt, Plus, Trash2, Pencil, Check, X, Search, FileText, Lock, ChevronDown, ChevronRight } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { type GastoMensual, type MetodoGasto, METODOS_GASTO, METODO_GASTO_LABEL } from "@/lib/types";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
@@ -36,6 +36,7 @@ export default function GastosMensuales() {
   const [busqueda, setBusqueda] = useState("");
   const [desde, setDesde] = useState(mes.desde);
   const [hasta, setHasta] = useState(mes.hasta);
+  const [listaAbierta, setListaAbierta] = useState(true);
 
   const lista = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -164,15 +165,21 @@ export default function GastosMensuales() {
         <StatCard label="Total del rango" value={total} tone="red" hint={`${lista.length} gasto(s)`} />
       </div>
 
-      {/* Lista */}
+      {/* Lista (plegable) */}
       <Card>
-        <h2 className="mb-2 font-semibold text-stone-800">Gastos del rango</h2>
-        <div className="space-y-1">
-          {lista.length === 0 && <p className="px-2 py-1 text-sm text-stone-400">No hay gastos en este rango.</p>}
-          {lista.map((g) => (
-            <FilaGasto key={g.id} gasto={g} onEditar={(f, c, m, met, otro) => { editar(g.id, f, c, m, met, otro); avisar(); }} onEliminar={() => borrar(g)} />
-          ))}
-        </div>
+        <button onClick={() => setListaAbierta((v) => !v)} className="flex w-full items-center gap-2 text-left font-semibold text-stone-800">
+          {listaAbierta ? <ChevronDown className="h-4 w-4 text-stone-400" /> : <ChevronRight className="h-4 w-4 text-stone-400" />}
+          <span>Gastos del rango</span>
+          <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-semibold text-stone-500">{lista.length}</span>
+        </button>
+        {listaAbierta && (
+          <div className="mt-2 space-y-1">
+            {lista.length === 0 && <p className="px-2 py-1 text-sm text-stone-400">No hay gastos en este rango.</p>}
+            {lista.map((g) => (
+              <FilaGasto key={g.id} gasto={g} onEditar={(f, c, m, met, otro) => { editar(g.id, f, c, m, met, otro); avisar(); }} onEliminar={() => borrar(g)} />
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );
