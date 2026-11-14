@@ -604,6 +604,12 @@ do $$ begin
 end $$;
 
 -- ============================================================
+-- Fase 7g: Pedidos — lugar donde se consigue (tablero por lugar)
+-- Solo AGREGA una columna opcional; no modifica ni borra datos.
+-- ============================================================
+alter table public.apartados add column if not exists lugar text;
+
+-- ============================================================
 -- Permisos para el rol de la app (la seguridad real la pone RLS)
 -- ============================================================
 grant usage on schema public to anon, authenticated;

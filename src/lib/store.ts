@@ -117,11 +117,13 @@ interface State {
     valorTotal: number;
     abonoInicial: number;
     metodoInicial: MetodoPago;
+    lugar?: string;
   }) => Promise<void>;
   abonarApartado: (id: string, fecha: string, monto: number, metodo: MetodoPago) => Promise<void>;
   editarApartado: (id: string, datos: { cliente: string; telefono: string; fecha: string; valorTotal: number; descripcion: string }) => Promise<void>;
   marcarConseguido: (id: string, conseguido: boolean) => Promise<void>;
   marcarEntregado: (id: string, entregado: boolean) => Promise<void>;
+  moverPedido: (id: string, lugar: string) => Promise<void>;
   eliminarAbono: (apartadoId: string, abonoId: string) => Promise<void>;
   eliminarApartado: (id: string) => Promise<void>;
 
@@ -386,7 +388,7 @@ export const useStore = create<State>()(
   },
 
   // ---------- Apartados ----------
-  agregarApartado: async ({ tipo, descripcion, fecha, cliente, telefono, valorTotal, abonoInicial, metodoInicial }) => {
+  agregarApartado: async ({ tipo, descripcion, fecha, cliente, telefono, valorTotal, abonoInicial, metodoInicial, lugar }) => {
     const negocioId = get().negocioActivoId;
     if (!negocioId || !cliente.trim()) return;
     const id = uuid();
@@ -396,9 +398,11 @@ export const useStore = create<State>()(
     const estado = estadoDe(valorTotal, abonoInicial);
     const abonos: Abono[] = [];
     if (abonoInicial > 0) abonos.push({ id: uuid(), fecha, monto: abonoInicial, metodo: metodoInicial });
-    const ap: Apartado = { id, negocioId, tipo, descripcion: desc, fecha, cliente: cli, telefono: tel, valorTotal, abonos, estado, conseguido: false, entregado: false, creadoEn: new Date().toISOString() };
+    const lug = (lugar ?? "").trim();
+    const ap: Apartado = { id, negocioId, tipo, descripcion: desc, fecha, cliente: cli, telefono: tel, valorTotal, abonos, estado, conseguido: false, entregado: false, lugar: lug, creadoEn: new Date().toISOString() };
     set((s) => ({ apartados: [...s.apartados, ap] }));
-    get().encolar({ tabla: "apartados", tipo: "insert", payload: { id, negocio_id: negocioId, tipo, descripcion: desc, fecha, cliente: cli, telefono: tel, valor_total: valorTotal, estado } });
+    // "lugar" solo se envía si se escribió (así los registros sin lugar no cambian en nada).
+    get().encolar({ tabla: "apartados", tipo: "insert", payload: { id, negocio_id: negocioId, tipo, descripcion: desc, fecha, cliente: cli, telefono: tel, valor_total: valorTotal, estado, ...(lug ? { lugar: lug } : {}) } });
     if (abonos.length) get().encolar({ tabla: "abonos", tipo: "insert", payload: { id: abonos[0].id, apartado_id: id, fecha, monto: abonoInicial, metodo: metodoInicial } });
   },
   abonarApartado: async (id, fecha, monto, metodo) => {
@@ -428,6 +432,11 @@ export const useStore = create<State>()(
   marcarEntregado: async (id, entregado) => {
     set((s) => ({ apartados: s.apartados.map((a) => (a.id === id ? { ...a, entregado, conseguido: entregado ? true : a.conseguido } : a)) }));
     get().encolar({ tabla: "apartados", tipo: "update", payload: { id, patch: entregado ? { entregado: true, conseguido: true } : { entregado: false } } });
+  },
+  moverPedido: async (id, lugar) => {
+    const lug = lugar.trim();
+    set((s) => ({ apartados: s.apartados.map((a) => (a.id === id ? { ...a, lugar: lug } : a)) }));
+    get().encolar({ tabla: "apartados", tipo: "update", payload: { id, patch: { lugar: lug || null } } });
   },
   eliminarAbono: async (apartadoId, abonoId) => {
     const ap = get().apartados.find((a) => a.id === apartadoId);

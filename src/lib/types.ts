@@ -111,6 +111,7 @@ export interface Apartado {
   estado: EstadoApartado;
   conseguido: boolean; // solo pedidos: si ya se consiguió/trajo a la tienda
   entregado: boolean; // solo pedidos: si ya se entregó al cliente
+  lugar?: string; // solo pedidos: dónde se va a conseguir (proveedor/lugar)
   creadoEn: string;
 }
 

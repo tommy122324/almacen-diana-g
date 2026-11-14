@@ -2,13 +2,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
-import { LayoutDashboard, NotebookPen, Package, FileBarChart, Settings, Clock, ListChecks, Receipt } from "lucide-react";
+import { LayoutDashboard, NotebookPen, Package, FileBarChart, Settings, Clock, ListChecks, Receipt, ClipboardList } from "lucide-react";
 import { useStore } from "@/lib/store";
 
 const items = [
   { href: "/", label: "Panel", corto: "Panel", icon: LayoutDashboard, soloAdmin: false, menuPerfil: false },
   { href: "/dia", label: "Registro del día", corto: "Registro", icon: NotebookPen, soloAdmin: false, menuPerfil: false },
   { href: "/apartados", label: "Apartados", corto: "Apartados", icon: Package, soloAdmin: false, menuPerfil: false },
+  { href: "/pedidos", label: "Pedidos", corto: "Pedidos", icon: ClipboardList, soloAdmin: false, menuPerfil: false },
   { href: "/tareas", label: "Tareas", corto: "Tareas", icon: ListChecks, soloAdmin: false, menuPerfil: false },
   { href: "/nomina", label: "Nómina", corto: "Nómina", icon: Clock, soloAdmin: false, menuPerfil: false },
   // En celular, estos viven en el menú de perfil (no en la barra inferior)
@@ -36,7 +37,7 @@ export function Nav({ barra = false }: { barra?: boolean }) {
             key={href}
             href={href}
             className={clsx(
-              "flex flex-1 flex-col items-center gap-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors md:flex-row md:gap-2 md:text-sm",
+              "flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-2 md:px-3 text-[11px] font-medium transition-colors md:flex-row md:gap-2 md:text-sm",
               activo ? "bg-amber-500 text-white shadow-sm" : "text-stone-500 hover:bg-stone-100",
             )}
           >

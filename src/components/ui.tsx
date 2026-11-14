@@ -56,16 +56,18 @@ export function StatCard({
   value,
   hint,
   tone = "default",
+  esConteo = false,
 }: {
   label: string;
   value: number;
   hint?: string;
   tone?: keyof typeof TONOS;
+  esConteo?: boolean; // muestra un número simple (no pesos)
 }) {
   return (
     <Card className="p-4">
       <div className="text-xs font-medium uppercase tracking-wide text-stone-400">{label}</div>
-      <div className={clsx("mt-1 text-2xl font-bold tabular-nums", TONOS[tone])}>{formatCOP(value)}</div>
+      <div className={clsx("mt-1 text-2xl font-bold tabular-nums", TONOS[tone])}>{esConteo ? value : formatCOP(value)}</div>
       {hint && <div className="mt-0.5 text-xs text-stone-400">{hint}</div>}
     </Card>
   );

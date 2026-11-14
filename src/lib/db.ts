@@ -103,6 +103,7 @@ function mApartado(r: Row): Apartado {
     estado: (r.estado as EstadoApartado) ?? "pendiente",
     conseguido: Boolean(r.conseguido),
     entregado: Boolean(r.entregado),
+    lugar: s(r.lugar),
     creadoEn: s(r.creado_en),
   };
 }

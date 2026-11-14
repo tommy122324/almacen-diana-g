@@ -341,6 +341,70 @@ export async function exportarPedidosPDF(negocio: string, pedidos: Apartado[]) {
   doc.save(`Pedidos_${negocio.replace(/[^\w]+/g, "_")}.pdf`);
 }
 
+/** PDF de pedidos pendientes (sin entregar) agrupados por el lugar donde se consiguen. */
+export async function exportarPedidosPorLugarPDF(negocio: string, pedidos: Apartado[]) {
+  const { default: jsPDF } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
+  const doc = new jsPDF();
+  const M = 14;
+  const SIN = "Sin lugar asignado";
+  const grupos = new Map<string, Apartado[]>();
+  for (const p of pedidos) {
+    const k = p.lugar?.trim() || SIN;
+    grupos.set(k, [...(grupos.get(k) ?? []), p]);
+  }
+  const lugares = [...grupos.keys()].sort((a, b) => (a === SIN ? 1 : b === SIN ? -1 : a.localeCompare(b, "es")));
+
+  doc.setFontSize(16);
+  doc.text(`Pedidos por lugar — ${negocio}`, M, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text(
+    `Generado: ${formatFechaCorta(new Date().toISOString().slice(0, 10))} · ${pedidos.length} pedido(s) pendientes · ${lugares.length} lugar(es)`,
+    M,
+    25,
+  );
+  doc.setTextColor(0);
+
+  let y = 32;
+  for (const lugar of lugares) {
+    const lista = grupos
+      .get(lugar)!
+      .slice()
+      // Primero lo que falta por conseguir, luego por fecha
+      .sort((a, b) => Number(a.conseguido) - Number(b.conseguido) || a.fecha.localeCompare(b.fecha));
+    const falta = lista.filter((p) => !p.conseguido).length;
+    if (y > 260) {
+      doc.addPage();
+      y = 18;
+    }
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${lugar}  (${lista.length} pedido(s) · ${falta} por conseguir)`, M, y);
+    doc.setFont("helvetica", "normal");
+    autoTable(doc, {
+      startY: y + 3,
+      head: [["", "Pedido", "Cliente", "Teléfono", "Fecha", "Estado"]],
+      body: lista.map((p) => [
+        p.conseguido ? "OK" : "",
+        p.descripcion || "-",
+        p.cliente,
+        p.telefono || "-",
+        formatFechaCorta(p.fecha),
+        p.conseguido ? "Conseguido" : "Por conseguir",
+      ]),
+      theme: "grid",
+      headStyles: { fillColor: [2, 132, 199] },
+      styles: { fontSize: 9, cellPadding: 2 },
+      columnStyles: { 0: { cellWidth: 9, halign: "center" }, 1: { cellWidth: 70 } },
+      margin: { left: M, right: M },
+    });
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+  }
+
+  doc.save(`Pedidos_por_lugar_${negocio.replace(/[^\w]+/g, "_")}.pdf`);
+}
+
 interface DatosComparativo {
   negocio: string;
   tipoLabel: string; // "meses", "semanas", "días"
