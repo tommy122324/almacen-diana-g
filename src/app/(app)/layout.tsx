@@ -98,16 +98,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-stone-50 text-stone-800">
+    <div className="flex min-h-screen bg-[#fdf8f1] bg-[radial-gradient(ellipse_at_top_right,_#fff1db_0%,_transparent_55%)] text-stone-800">
       <NotificacionesPedidos />
       <SincronizadorOffline />
       <ActualizacionDisponible />
       <SaludoBienvenida />
       {/* Barra lateral (escritorio) */}
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-5 border-r border-stone-200 bg-white p-4 md:flex">
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-5 border-r border-amber-100 bg-white/80 p-4 backdrop-blur md:flex">
         <div className="flex items-center gap-2 px-1 pt-1">
-          <span className="text-2xl">🐝</span>
-          <span className="truncate text-lg font-bold text-stone-800">{nombreNegocio}</span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-400 text-xl shadow-md shadow-orange-500/20">🐝</span>
+          <span className="truncate text-lg font-extrabold tracking-tight text-stone-800">{nombreNegocio}</span>
         </div>
         <BusinessSelector />
         <Nav />
@@ -125,7 +125,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Contenido */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Encabezado (celular) */}
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-stone-200 bg-white p-3 md:hidden">
+        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-amber-100 bg-white/90 p-3 backdrop-blur md:hidden">
           <span className="text-2xl">🐝</span>
           <div className="flex-1">
             <BusinessSelector />
@@ -137,7 +137,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main className="mx-auto w-full max-w-5xl flex-1 p-4 pb-24 md:p-8 md:pb-8">{children}</main>
 
         {/* Barra inferior (celular) */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-stone-200 bg-white/95 p-2 backdrop-blur md:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-amber-100 bg-white/90 p-2 shadow-[0_-4px_20px_-8px_rgba(154,52,18,0.15)] backdrop-blur md:hidden">
           <Nav barra />
         </nav>
       </div>

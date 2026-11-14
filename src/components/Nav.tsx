@@ -37,8 +37,8 @@ export function Nav({ barra = false }: { barra?: boolean }) {
             key={href}
             href={href}
             className={clsx(
-              "flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-2 md:px-3 text-[11px] font-medium transition-colors md:flex-row md:gap-2 md:text-sm",
-              activo ? "bg-amber-500 text-white shadow-sm" : "text-stone-500 hover:bg-stone-100",
+              "flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl px-1 py-2 md:px-3 md:py-2.5 text-[11px] font-medium transition-colors md:flex-row md:gap-2 md:text-sm",
+              activo ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/25" : "text-stone-500 hover:bg-amber-50 hover:text-amber-800",
             )}
           >
             <Icon className="h-5 w-5 shrink-0 md:h-4 md:w-4" />

@@ -1,17 +1,25 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, X, ClipboardList, Search, FileText, MapPin, GripVertical, Phone } from "lucide-react";
+import { Plus, X, ClipboardList, Search, FileText, MapPin, GripVertical, Phone, Pencil, Trash2, Check } from "lucide-react";
 import { useStore, abonadoDe, saldoDe } from "@/lib/store";
 import { METODOS, METODO_LABEL, type Apartado, type MetodoPago } from "@/lib/types";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { hoyISO } from "@/lib/calc";
-import { avisar, avisarFalta } from "@/lib/alerta";
+import { avisar, avisarFalta, confirmarEliminar } from "@/lib/alerta";
 import { exportarPedidosPDF, exportarPedidosPorLugarPDF } from "@/lib/export";
 import { MoneyInput } from "@/components/MoneyInput";
 import { Card, Boton, StatCard, Input, Field, Chip, Select, inputCls } from "@/components/ui";
 import { ApartadoCard, ListaPlegable, confirmarBorrarApartado } from "@/components/ApartadoCard";
 
 const SIN = ""; // columna "Sin lugar"
+
+/** Color cálido estable por lugar (para el punto de la columna). */
+const COLORES = ["bg-orange-400", "bg-amber-400", "bg-rose-400", "bg-yellow-400", "bg-red-400", "bg-pink-400", "bg-lime-500", "bg-teal-400"];
+function colorDe(l: string) {
+  let h = 0;
+  for (const ch of l) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return COLORES[h % COLORES.length];
+}
 
 /** Columnas extra (lugares creados vacíos) guardadas solo en este dispositivo. */
 function leerLugaresExtra(negocioId: string | null): string[] {
@@ -54,6 +62,8 @@ export default function Pedidos() {
   const [abiertoId, setAbiertoId] = useState<string | null>(null);
   const [arrastrando, setArrastrando] = useState<string | null>(null);
   const [sobre, setSobre] = useState<string | null>(null);
+  const [editandoCol, setEditandoCol] = useState<string | null>(null);
+  const [nombreCol, setNombreCol] = useState("");
 
   useEffect(() => setExtras(leerLugaresExtra(negocioId)), [negocioId]);
 
@@ -145,6 +155,28 @@ export default function Pedidos() {
     guardarLugaresExtra(negocioId, v);
   }
 
+  /** Renombra un lugar: cambia el lugar de sus pedidos (solo ese campo). */
+  function renombrarLugar(viejo: string) {
+    const nuevo = nombreCol.trim();
+    setEditandoCol(null);
+    if (!nuevo || nuevo === viejo) return;
+    for (const a of g.todos) if ((a.lugar?.trim() ?? "") === viejo) moverPedido(a.id, nuevo);
+    const v = [...new Set(extras.map((x) => (x === viejo ? nuevo : x)))];
+    setExtras(v);
+    guardarLugaresExtra(negocioId, v);
+    avisar(`Lugar renombrado a "${nuevo}"`);
+  }
+
+  /** Elimina un lugar: sus pedidos pasan a "Sin lugar" (no se borra ningún pedido). */
+  async function eliminarLugar(l: string) {
+    const n = g.todos.filter((a) => (a.lugar?.trim() ?? "") === l).length;
+    const msg = n > 0 ? `Se quitará el lugar "${l}". Sus ${n} pedido(s) pasarán a "Sin lugar". No se borra ningún pedido.` : `Se quitará el lugar "${l}".`;
+    if (!(await confirmarEliminar(msg))) return;
+    for (const a of g.todos) if ((a.lugar?.trim() ?? "") === l) moverPedido(a.id, "");
+    quitarColumna(l);
+    avisar("Lugar eliminado");
+  }
+
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-bold text-stone-800">Pedidos</h1>
@@ -231,12 +263,14 @@ export default function Pedidos() {
       </div>
 
       {/* ── TABLERO POR LUGAR ── */}
-      <section className="min-w-0 rounded-2xl border-2 border-sky-200 bg-sky-50/50 p-4">
+      <section className="min-w-0 rounded-3xl border border-amber-100 bg-gradient-to-br from-white via-amber-50/40 to-orange-50/50 p-4 shadow-[0_8px_30px_-12px_rgba(154,52,18,0.15)] md:p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-sky-600" />
-            <h2 className="text-lg font-bold text-sky-800">Tablero por lugar</h2>
-            <span className="rounded-full bg-sky-200 px-2 py-0.5 text-xs font-semibold text-sky-800">{g.pend.length} pendientes</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-md shadow-orange-500/25">
+              <MapPin className="h-5 w-5" />
+            </span>
+            <h2 className="text-lg font-extrabold tracking-tight text-stone-800">Tablero por lugar</h2>
+            <span className="rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-bold text-orange-700">{g.pend.length} pendientes</span>
           </div>
           {esAdmin && g.todos.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -266,7 +300,7 @@ export default function Pedidos() {
             </Boton>
           </div>
         )}
-        {esAdmin && <p className="mb-3 text-xs text-sky-700">Arrastra las tarjetas entre columnas (en el celular usa “Mover a”). Toca una tarjeta para ver abonos y entregar.</p>}
+        {esAdmin && <p className="mb-3 text-xs text-stone-500">Arrastra las tarjetas entre columnas (en el celular usa “Mover a”). Toca una tarjeta para ver abonos y entregar.</p>}
 
         <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2">
           {g.columnas.map((col) => {
@@ -288,25 +322,66 @@ export default function Pedidos() {
                   setArrastrando(null);
                   setSobre(null);
                 }}
-                className={`flex w-72 shrink-0 snap-start flex-col rounded-xl border p-2 transition ${resaltada ? "border-sky-500 bg-sky-100" : "border-stone-200 bg-stone-50"}`}
+                className={`flex w-72 shrink-0 snap-start flex-col rounded-2xl border p-2.5 transition ${resaltada ? "border-orange-400 bg-orange-50 ring-4 ring-orange-100" : col ? "border-amber-100 bg-[#fffaf2]" : "border-stone-200/80 bg-stone-50/80"}`}
               >
-                <div className="mb-2 flex items-center justify-between gap-2 px-1">
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <MapPin className={`h-4 w-4 shrink-0 ${col ? "text-sky-600" : "text-stone-400"}`} />
-                    <span className={`truncate text-sm font-bold ${col ? "text-stone-800" : "text-stone-500"}`}>{col || "Sin lugar"}</span>
-                    <span className="rounded-full bg-white px-1.5 text-xs font-semibold text-stone-500 ring-1 ring-stone-200">{items.length}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {falta > 0 && <span className="text-[11px] font-semibold text-rose-600">{falta} por conseguir</span>}
-                    {esAdmin && col && items.length === 0 && extras.includes(col) && (
-                      <button onClick={() => quitarColumna(col)} className="text-stone-300 hover:text-rose-500" aria-label="Quitar columna">
+                <div className="mb-2.5 flex items-center justify-between gap-2 px-1">
+                  {editandoCol === col && col ? (
+                    <div className="flex w-full items-center gap-1">
+                      <input
+                        autoFocus
+                        value={nombreCol}
+                        onChange={(e) => setNombreCol(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") renombrarLugar(col);
+                          if (e.key === "Escape") setEditandoCol(null);
+                        }}
+                        className={`${inputCls} !py-1.5`}
+                      />
+                      <button onClick={() => renombrarLugar(col)} className="rounded-lg p-1.5 text-emerald-600 hover:bg-emerald-50" aria-label="Guardar">
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => setEditandoCol(null)} className="rounded-lg p-1.5 text-stone-400 hover:bg-stone-100" aria-label="Cancelar">
                         <X className="h-4 w-4" />
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${col ? colorDe(col) : "bg-stone-300"}`} />
+                        <span className={`truncate text-sm font-bold ${col ? "text-stone-800" : "text-stone-500"}`}>{col || "Sin lugar"}</span>
+                        <span className="rounded-full bg-white px-2 text-xs font-semibold text-stone-500 shadow-sm ring-1 ring-amber-100">{items.length}</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        {falta > 0 && <span className="mr-1 rounded-full bg-rose-50 px-1.5 text-[11px] font-semibold text-rose-600">{falta} por conseguir</span>}
+                        {esAdmin && col && (
+                          <>
+                            <button
+                              onClick={() => {
+                                setNombreCol(col);
+                                setEditandoCol(col);
+                              }}
+                              className="rounded-lg p-1 text-stone-300 transition hover:bg-amber-100 hover:text-amber-700"
+                              aria-label="Renombrar lugar"
+                              title="Renombrar lugar"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => eliminarLugar(col)}
+                              className="rounded-lg p-1 text-stone-300 transition hover:bg-rose-50 hover:text-rose-500"
+                              aria-label="Eliminar lugar"
+                              title="Eliminar lugar"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div className="flex min-h-[60px] flex-col gap-2">
-                  {items.length === 0 && <p className="px-1 py-3 text-center text-xs text-stone-400">{esAdmin ? "Suelta aquí un pedido" : "Sin pedidos"}</p>}
+                  {items.length === 0 && <p className="rounded-xl border-2 border-dashed border-amber-200/70 px-1 py-5 text-center text-xs text-stone-400">{esAdmin ? "Suelta aquí un pedido" : "Sin pedidos"}</p>}
                   {items.map((a) => (
                     <TarjetaPedido
                       key={a.id}
@@ -332,7 +407,7 @@ export default function Pedidos() {
 
       {/* Entregados */}
       {g.entregados.length > 0 && (
-        <section className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/40 p-4">
+        <section className="rounded-3xl border border-emerald-100 bg-emerald-50/40 p-4">
           <ListaPlegable titulo="Entregados" items={g.entregados} abiertoInicial={false} forzarAbierto={buscando} onEliminar={borrar} puedeAdmin={esAdmin} />
         </section>
       )}
@@ -393,11 +468,11 @@ function TarjetaPedido({
         onDragStart();
       }}
       onDragEnd={onDragEnd}
-      className={`rounded-lg border bg-white p-2.5 shadow-sm transition ${arrastrandoEste ? "opacity-40" : ""} ${a.conseguido ? "border-emerald-300" : "border-stone-200"}`}
+      className={`group rounded-xl border border-l-4 bg-white p-3 shadow-[0_1px_2px_rgba(120,53,15,0.05),0_4px_12px_-6px_rgba(120,53,15,0.12)] transition hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-10px_rgba(154,52,18,0.3)] ${arrastrandoEste ? "rotate-1 opacity-40" : ""} ${a.conseguido ? "border-amber-100 border-l-emerald-400" : "border-amber-100 border-l-orange-400"}`}
     >
       <button onClick={onAbrir} className="block w-full text-left">
         <div className="flex items-start gap-1">
-          {esAdmin && <GripVertical className="mt-0.5 hidden h-4 w-4 shrink-0 cursor-grab text-stone-300 md:block" />}
+          {esAdmin && <GripVertical className="mt-0.5 hidden h-4 w-4 shrink-0 cursor-grab text-stone-300 transition group-hover:text-amber-500 md:block" />}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="font-semibold text-stone-800">{a.cliente}</span>
@@ -422,7 +497,7 @@ function TarjetaPedido({
         </div>
       </button>
       {esAdmin && (
-        <Select value={actual} onChange={(e) => onMover(e.target.value)} className="mt-2 !py-1.5 text-xs" aria-label="Mover a">
+        <Select value={actual} onChange={(e) => onMover(e.target.value)} className="mt-2.5 !border-amber-100 !bg-amber-50/60 !py-1.5 text-xs" aria-label="Mover a">
           {columnas.map((c) => (
             <option key={c || "__sin"} value={c}>
               {c === actual ? "📍 " : "Mover a: "}
