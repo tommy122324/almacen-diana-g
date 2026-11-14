@@ -5,7 +5,7 @@ import { useStore, abonadoDe, saldoDe } from "@/lib/store";
 import { METODOS, METODO_LABEL, type Apartado, type MetodoPago } from "@/lib/types";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { hoyISO } from "@/lib/calc";
-import { avisar, confirmarEliminar, avisarFalta } from "@/lib/alerta";
+import { avisar, confirmarEliminar, avisarFalta, confirmar } from "@/lib/alerta";
 import { abrirWhatsApp, mensajePedidoLlego } from "@/lib/whatsapp";
 import { MoneyInput } from "@/components/MoneyInput";
 import { Card, Boton, Input, Field, Chip, Select, inputCls } from "@/components/ui";
@@ -57,7 +57,7 @@ export function ListaPlegable({
   );
 }
 
-export function ApartadoCard({ apartado, onEliminar, puedeAdmin }: { apartado: Apartado; onEliminar: () => void; puedeAdmin: boolean }) {
+export function ApartadoCard({ apartado, onEliminar, puedeAdmin, onEntregado }: { apartado: Apartado; onEliminar: () => void; puedeAdmin: boolean; onEntregado?: () => void }) {
   const abonar = useStore((s) => s.abonarApartado);
   const editar = useStore((s) => s.editarApartado);
   const eliminarAbono = useStore((s) => s.eliminarAbono);
@@ -214,11 +214,19 @@ export function ApartadoCard({ apartado, onEliminar, puedeAdmin }: { apartado: A
           {apartado.conseguido && !apartado.entregado && (
             <>
               <Boton
-                onClick={() => {
-                  // Abrir WhatsApp (dentro del gesto) y marcar entregado
+                onClick={async () => {
+                  // Confirmación de seguridad para evitar entregas por error
+                  const ok = await confirmar(
+                    "¿Marcar como ENTREGADO?",
+                    `El pedido de ${apartado.cliente} saldrá del tablero y pasará a "Entregados".${apartado.telefono ? " Se abrirá WhatsApp para avisarle." : ""}`,
+                    "Sí, entregar",
+                  );
+                  if (!ok) return;
+                  // Abrir WhatsApp (el clic en "Sí" cuenta como gesto) y marcar entregado
                   if (apartado.telefono) abrirWhatsApp(apartado.telefono, mensajePedidoLlego(apartado.descripcion));
                   marcarEntregado(apartado.id, true);
                   avisar("¡Pedido entregado! ✅");
+                  onEntregado?.();
                 }}
               >
                 <Check className="h-4 w-4" /> Entregar + avisar por WhatsApp

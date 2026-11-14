@@ -300,9 +300,9 @@ export default function Pedidos() {
             </Boton>
           </div>
         )}
-        {esAdmin && <p className="mb-3 text-xs text-stone-500">Arrastra las tarjetas entre columnas (en el celular usa “Mover a”). Toca una tarjeta para ver abonos y entregar.</p>}
+        {esAdmin && <p className="mb-3 text-xs text-stone-500">Arrastra las tarjetas entre columnas (en el celular usa “Mover a”). Toca una tarjeta para ver abonos y entregar. Al entregarlo sale del tablero y pasa a “Entregados”.</p>}
 
-        <div className="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2">
+        <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2 md:mx-0 md:grid md:grid-cols-[repeat(auto-fill,minmax(270px,1fr))] md:overflow-visible md:px-0">
           {g.columnas.map((col) => {
             const items = g.porColumna.get(col) ?? [];
             const falta = items.filter((a) => !a.conseguido).length;
@@ -322,9 +322,9 @@ export default function Pedidos() {
                   setArrastrando(null);
                   setSobre(null);
                 }}
-                className={`flex w-72 shrink-0 snap-start flex-col rounded-2xl border p-2.5 transition ${resaltada ? "border-orange-400 bg-orange-50 ring-4 ring-orange-100" : col ? "border-amber-100 bg-[#fffaf2]" : "border-stone-200/80 bg-stone-50/80"}`}
+                className={`flex w-[85%] max-w-[320px] shrink-0 snap-start flex-col rounded-2xl md:w-auto md:max-w-none border p-2.5 transition ${resaltada ? "border-orange-400 bg-orange-50 ring-4 ring-orange-100" : col ? "border-amber-100 bg-[#fffaf2]" : "border-stone-200/80 bg-stone-50/80"}`}
               >
-                <div className="mb-2.5 flex items-center justify-between gap-2 px-1">
+                <div className="mb-2.5 flex items-start justify-between gap-2 px-1">
                   {editandoCol === col && col ? (
                     <div className="flex w-full items-center gap-1">
                       <input
@@ -346,13 +346,15 @@ export default function Pedidos() {
                     </div>
                   ) : (
                     <>
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${col ? colorDe(col) : "bg-stone-300"}`} />
-                        <span className={`truncate text-sm font-bold ${col ? "text-stone-800" : "text-stone-500"}`}>{col || "Sin lugar"}</span>
-                        <span className="rounded-full bg-white px-2 text-xs font-semibold text-stone-500 shadow-sm ring-1 ring-amber-100">{items.length}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${col ? colorDe(col) : "bg-stone-300"}`} />
+                          <span className={`break-words text-sm font-bold leading-tight ${col ? "text-stone-800" : "text-stone-500"}`} title={col || "Sin lugar"}>{col || "Sin lugar"}</span>
+                          <span className="shrink-0 rounded-full bg-white px-2 text-xs font-semibold text-stone-500 shadow-sm ring-1 ring-amber-100">{items.length}</span>
+                        </div>
+                        {falta > 0 && <span className="ml-[18px] mt-1 inline-block rounded-full bg-rose-50 px-2 text-[11px] font-semibold text-rose-600">{falta} por conseguir</span>}
                       </div>
-                      <div className="flex shrink-0 items-center gap-0.5">
-                        {falta > 0 && <span className="mr-1 rounded-full bg-rose-50 px-1.5 text-[11px] font-semibold text-rose-600">{falta} por conseguir</span>}
+                      <div className="flex shrink-0 items-center gap-0.5 self-start">
                         {esAdmin && col && (
                           <>
                             <button
@@ -425,6 +427,7 @@ export default function Pedidos() {
               key={abierto.id}
               apartado={abierto}
               puedeAdmin={esAdmin}
+              onEntregado={() => setAbiertoId(null)}
               onEliminar={async () => {
                 await borrar(abierto);
                 if (!useStore.getState().apartados.some((x) => x.id === abierto.id)) setAbiertoId(null);

@@ -13,7 +13,9 @@ export function abrirWhatsApp(tel: string, mensaje: string) {
   const num = telefonoWhatsApp(tel);
   if (!num) return;
   const url = `https://wa.me/${num}?text=${encodeURIComponent(mensaje)}`;
-  window.open(url, "_blank");
+  const w = window.open(url, "_blank");
+  // Si el navegador bloqueó la ventana nueva, abrir en la misma.
+  if (!w) window.location.href = url;
 }
 
 /** Mensaje cuando un pedido llegó a la tienda. */
