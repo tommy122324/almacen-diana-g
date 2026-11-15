@@ -43,7 +43,15 @@ export function ReciboModal({ recibo, onCerrar }: { recibo: Recibo; onCerrar: ()
   const archivo = useMemo(() => (blob ? new File([blob], nombreArchivoRecibo(recibo), { type: "image/png" }) : null), [blob, recibo]);
   const esCelular = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
   const compartible = !!archivo && puedeCompartirArchivo(archivo);
-  const texto = mensajeRecibo(recibo, negocio);
+  const texto = mensajeRecibo(recibo, negocio, false);
+  const tieneCel = recibo.telefono.replace(/\D/g, "").length >= 7;
+
+  /** Abre el chat del cliente con el mensaje + link del recibo: solo toca Enviar. */
+  async function enviarLink() {
+    if (!(await asegurarWhatsAppDispositivo())) return;
+    setNumDispositivo(numeroDeEsteDispositivo());
+    abrirWhatsApp(recibo.telefono, mensajeRecibo(recibo, negocio, true));
+  }
 
   async function compartir() {
     if (!archivo) return;
@@ -100,19 +108,20 @@ export function ReciboModal({ recibo, onCerrar }: { recibo: Recibo; onCerrar: ()
         </div>
 
         <div className="space-y-2 border-t border-amber-100 p-4">
-          {esCelular && compartible ? (
-            <Boton onClick={compartir} disabled={!blob} className="w-full !bg-none !bg-emerald-500 hover:!bg-emerald-600 !shadow-emerald-500/25">
-              <Send className="h-4 w-4" /> Enviar por WhatsApp
-            </Boton>
-          ) : (
-            <Boton onClick={enviarPC} disabled={!blob} className="w-full !bg-none !bg-emerald-500 hover:!bg-emerald-600 !shadow-emerald-500/25">
-              <Send className="h-4 w-4" /> {recibo.telefono.trim() ? "Copiar y abrir chat del cliente" : "Copiar recibo"}
+          {tieneCel && (
+            <Boton onClick={enviarLink} className="w-full !bg-none !bg-emerald-500 !py-3 !text-base hover:!bg-emerald-600 !shadow-emerald-500/25">
+              <Send className="h-5 w-5" /> Enviar a {recibo.cliente.trim().split(/\s+/)[0] || "el cliente"} por WhatsApp
             </Boton>
           )}
+          {tieneCel && <p className="text-center text-xs text-stone-500">Se abre el chat del cliente con el recibo listo. Solo toca <b>Enviar</b>.</p>}
           <div className="flex gap-2">
-            {!esCelular && compartible && (
+            {esCelular && compartible ? (
               <Boton variant="outline" onClick={compartir} disabled={!blob} className="flex-1">
-                <Share2 className="h-4 w-4" /> Compartir…
+                <Share2 className="h-4 w-4" /> Como imagen
+              </Boton>
+            ) : (
+              <Boton variant="outline" onClick={enviarPC} disabled={!blob} className="flex-1">
+                <Share2 className="h-4 w-4" /> Como imagen
               </Boton>
             )}
             <Boton
@@ -125,16 +134,13 @@ export function ReciboModal({ recibo, onCerrar }: { recibo: Recibo; onCerrar: ()
               disabled={!blob}
               className="flex-1"
             >
-              <Download className="h-4 w-4" /> Descargar imagen
+              <Download className="h-4 w-4" /> Descargar
             </Boton>
           </div>
           {numDispositivo && (
             <p className="text-center text-xs text-stone-500">
               Se envía desde el WhatsApp del almacén <b>{formatoNumero(numDispositivo)}</b>
             </p>
-          )}
-          {esCelular && compartible && (
-            <p className="text-center text-xs text-stone-400">Elige WhatsApp y luego el chat de {recibo.cliente.trim() || "tu cliente"}.</p>
           )}
         </div>
       </div>

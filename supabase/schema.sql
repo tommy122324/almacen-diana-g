@@ -670,6 +670,21 @@ begin
 end $$;
 grant execute on function public.crear_recibo(uuid, uuid, uuid, date, text, text, text, text, bigint, text) to authenticated;
 
+-- Fase 7j: link público del recibo (para la vista previa en WhatsApp).
+-- Solo devuelve UN recibo si se conoce su id (uuid imposible de adivinar).
+create or replace function public.recibo_publico(p_id uuid)
+returns json language sql security definer stable set search_path = public as $$
+  select json_build_object(
+    'id', r.id, 'numero', r.numero, 'fecha', r.fecha, 'cliente', r.cliente, 'telefono', r.telefono,
+    'detalle', r.detalle, 'metodo', r.metodo, 'total', r.total, 'atendio', r.atendio, 'creado_en', r.creado_en,
+    'negocio', n.nombre, 'politica', c.politica_recibo, 'whatsapp', c.whatsapp)
+  from public.recibos r
+  join public.negocios n on n.id = r.negocio_id
+  left join public.configuracion c on c.negocio_id = r.negocio_id
+  where r.id = p_id;
+$$;
+grant execute on function public.recibo_publico(uuid) to anon, authenticated;
+
 -- ============================================================
 -- Permisos para el rol de la app (la seguridad real la pone RLS)
 -- ============================================================

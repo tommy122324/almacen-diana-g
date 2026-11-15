@@ -282,10 +282,25 @@ export function nombreArchivoRecibo(r: Recibo) {
   return `Recibo_${numeroRecibo(r.numero)}.png`;
 }
 
-/** Mensaje corto que acompaña la imagen en WhatsApp. */
-export function mensajeRecibo(r: Recibo, negocio: string) {
-  const nombre = r.cliente.trim().split(/\s+/)[0];
-  return `Hola${nombre ? ` ${nombre}` : ""} 👋, te compartimos el recibo de tu compra N° ${numeroRecibo(r.numero)} en ${negocio}. ¡Gracias por preferirnos! 🐝`;
+/** Link público del recibo (muestra la vista previa en WhatsApp). */
+export function linkRecibo(r: Recibo) {
+  return `${window.location.origin}/r/${r.id}`;
+}
+
+/**
+ * Mensaje para WhatsApp. SIN emojis: WhatsApp de escritorio los daña (salen como "�")
+ * cuando vienen en un enlace wa.me.
+ */
+export function mensajeRecibo(r: Recibo, negocio: string, conLink = true) {
+  const nombre = r.cliente.trim();
+  const lineas = [
+    `Hola${nombre ? ` ${nombre}` : ""}, gracias por tu compra en ${negocio}.`,
+    "",
+    `Aquí está tu recibo N° ${numeroRecibo(r.numero)} por ${formatCOP(r.total)}:`,
+  ];
+  if (conLink) lineas.push(linkRecibo(r));
+  lineas.push("", "Guárdalo para cualquier cambio o reclamo. ¡Te esperamos pronto!");
+  return lineas.join("\n");
 }
 
 /** ¿El dispositivo puede compartir archivos (celular)? */
