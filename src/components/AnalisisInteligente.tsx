@@ -52,7 +52,7 @@ export function AnalisisInteligente() {
     const a = iso(addDays(lunes, -7 * (SEMANAS_HIST + 1)));
     const b = iso(startOfMonth(subMonths(h, 1)));
     asegurarRango(a < b ? a : b, hoy);
-  }, [hoy, asegurarRango]);
+  }, [hoy, asegurarRango, negocioId]);
 
   const a = useMemo(() => {
     if (!negocioId) return null;

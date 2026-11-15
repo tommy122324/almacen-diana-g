@@ -56,7 +56,7 @@ export default function RegistroDia() {
   // Cargar el día seleccionado si aún no está en memoria (el admin puede ir a fechas viejas)
   useEffect(() => {
     asegurarRango(fecha, fecha);
-  }, [fecha, asegurarRango]);
+  }, [fecha, asegurarRango, negocioId]);
 
   // Datos del día seleccionado
   const dia = useMemo(() => {
@@ -140,7 +140,7 @@ export default function RegistroDia() {
           <p className="text-sm capitalize text-stone-500">{formatFechaLarga(fecha)}</p>
         </div>
         {esAdmin ? (
-          <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="w-auto" />
+          <Input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="sm:w-auto" />
         ) : (
           <span className="rounded-xl bg-stone-100 px-3 py-2 text-sm font-medium text-stone-600">Hoy</span>
         )}
@@ -155,7 +155,7 @@ export default function RegistroDia() {
         <MiniStat label="Abonos" value={totalAbonos} tone="text-amber-600" />
         <MiniStat label="Entradas" value={totalEntradas} tone="text-sky-600" />
         <MiniStat label="Gastos" value={totalGastos} tone="text-rose-600" />
-        <MiniStat label="Utilidad" value={utilidad} tone={utilidad >= 0 ? "text-stone-800" : "text-rose-600"} />
+        <MiniStat label="Utilidad" value={utilidad} tone={utilidad >= 0 ? "text-stone-800" : "text-rose-600"} className="col-span-2 lg:col-span-1" />
       </div>
 
       {/* Ventas */}
@@ -218,7 +218,7 @@ export default function RegistroDia() {
       {/* Cuadre de caja (solo admin) */}
       {esAdmin && (
       <Card>
-        <div className="mb-1 flex items-center justify-between">
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold text-stone-800">Cuadre de caja</h2>
           <Boton variant="outline" onClick={() => setVerGrafico((v) => !v)}>
             <BarChart3 className="h-4 w-4" /> {verGrafico ? "Ocultar gráfico" : "Ver ingresos por método"}
@@ -339,11 +339,11 @@ export default function RegistroDia() {
   );
 }
 
-function MiniStat({ label, value, tone, hint }: { label: string; value: number; tone: string; hint?: string }) {
+function MiniStat({ label, value, tone, hint, className = "" }: { label: string; value: number; tone: string; hint?: string; className?: string }) {
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm">
+    <div className={`min-w-0 rounded-2xl border border-amber-100 bg-white p-3 shadow-[0_1px_2px_rgba(120,53,15,0.04),0_6px_16px_-10px_rgba(120,53,15,0.15)] ${className}`}>
       <div className="text-xs text-stone-500">{label}</div>
-      <div className={`mt-0.5 text-lg font-bold tabular-nums ${tone}`}>{formatCOP(value)}</div>
+      <div className={`mt-0.5 truncate text-lg font-bold tabular-nums ${tone}`}>{formatCOP(value)}</div>
       {hint && <div className="text-[10px] text-stone-400">{hint}</div>}
     </div>
   );

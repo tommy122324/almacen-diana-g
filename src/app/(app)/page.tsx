@@ -68,7 +68,7 @@ export default function Panel() {
   useEffect(() => {
     const desde = periodoPrev.desde < periodo.desde ? periodoPrev.desde : periodo.desde;
     asegurarRango(desde, periodo.hasta);
-  }, [periodo.desde, periodo.hasta, periodoPrev.desde, asegurarRango]);
+  }, [periodo.desde, periodo.hasta, periodoPrev.desde, asegurarRango, negocioId]);
 
   const datos = useMemo(() => {
     const v = filtrar(ventas, negocioId, periodo);

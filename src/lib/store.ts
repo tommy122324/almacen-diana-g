@@ -137,6 +137,17 @@ interface State {
 
 // Cola para que las peticiones de rango no compitan entre sí (Panel, comparativo, etc.).
 let colaRango: Promise<void> = Promise.resolve();
+// Toda carga de movimientos pasa por la misma fila (colaRango) para que una carga
+// nunca pise a otra (antes, al cambiar de pestaña, a veces se "perdían" días).
+let refrescoEnCola = false;
+function enFila<T>(tarea: () => Promise<T>): Promise<T> {
+  const r = colaRango.then(tarea);
+  colaRango = r.then(
+    () => undefined,
+    () => undefined,
+  );
+  return r;
+}
 
 /** Genera un id único en el dispositivo (para que la nube nunca duplique un registro). */
 export function uuid(): string {
@@ -210,24 +221,33 @@ export const useStore = create<State>()(
     if (get().pendientes.length === 0) get().refrescarRemoto();
   },
   refrescarRemoto: async () => {
-    const { negocioActivoId, movDesde, movHasta } = get();
-    if (!negocioActivoId) return;
-    // No pisar cambios locales que aún no se han subido.
-    if (get().pendientes.length > 0) return;
-    try {
-      const [base, mov, config] = await Promise.all([
-        db.cargarBase(negocioActivoId),
-        db.cargarMovimientos(negocioActivoId, movDesde, movHasta),
-        db.cargarConfig(negocioActivoId),
-      ]);
-      set((s) => ({ ...base, ...mov, config, revision: s.revision + 1 }));
-    } catch (e) {
-      console.error(e);
-    }
+    // Si ya hay un refresco esperando en la fila, ese mismo traerá lo último.
+    if (refrescoEnCola) return colaRango;
+    refrescoEnCola = true;
+    return enFila(async () => {
+      refrescoEnCola = false;
+      // La ventana se lee AQUÍ (ya con lo que hayan ampliado otras cargas).
+      const { negocioActivoId, movDesde, movHasta } = get();
+      if (!negocioActivoId) return;
+      // No pisar cambios locales que aún no se han subido.
+      if (get().pendientes.length > 0) return;
+      try {
+        const [base, mov, config] = await Promise.all([
+          db.cargarBase(negocioActivoId),
+          db.cargarMovimientos(negocioActivoId, movDesde, movHasta),
+          db.cargarConfig(negocioActivoId),
+        ]);
+        // Si mientras tanto cambió el negocio o hay cambios locales nuevos, no pisar.
+        if (get().negocioActivoId !== negocioActivoId || get().pendientes.length > 0) return;
+        set((s) => ({ ...base, ...mov, config, revision: s.revision + 1 }));
+      } catch (e) {
+        console.error(e);
+      }
+    });
   },
   asegurarRango: (desde, hasta) => {
     // Encolar: cada petición se ejecuta después de la anterior, viendo la ventana ya ampliada.
-    colaRango = colaRango.then(async () => {
+    return enFila(async () => {
       const { negocioActivoId, movDesde, movHasta } = get();
       if (!negocioActivoId || !desde || !hasta) return;
       if (desde >= movDesde && hasta <= movHasta) return; // ya cargado
@@ -242,7 +262,6 @@ export const useStore = create<State>()(
         set({ cargandoRango: false });
       }
     });
-    return colaRango;
   },
   setConfig: (patch) =>
     conError(async () => {
@@ -269,6 +288,7 @@ export const useStore = create<State>()(
       return;
     }
     set({ cargando: true });
+    return enFila(async () => {
     try {
       let negocios = await db.cargarNegocios();
       if (negocios.length === 0) {
@@ -278,13 +298,20 @@ export const useStore = create<State>()(
       const prev = get().negocioActivoId;
       const activo = prev && negocios.some((x) => x.id === prev) ? prev : negocios[0].id;
       const p = periodoDe("mes"); // arranca con el mes actual
+      // Mismo negocio: conservar el rango ya cargado (no achicarlo).
+      const mismo = prev === activo;
+      const cur = get();
+      const desde = mismo && cur.movDesde && cur.movDesde < p.desde ? cur.movDesde : p.desde;
+      const hasta = mismo && cur.movHasta && cur.movHasta > p.hasta ? cur.movHasta : p.hasta;
       const [base, mov, config, info] = await Promise.all([
         db.cargarBase(activo),
-        db.cargarMovimientos(activo, p.desde, p.hasta),
+        db.cargarMovimientos(activo, desde, hasta),
         db.cargarConfig(activo),
         db.miInfo(activo),
       ]);
-      set({ negocios, negocioActivoId: activo, ...base, ...mov, movDesde: p.desde, movHasta: p.hasta, config, miRol: info.rol, miNombre: info.nombre, esAdmin: info.rol === "dueño" || info.rol === "admin", cargando: false, cargado: true, saludoListo: true });
+      // No pisar cambios locales que aún no se han subido (se mantienen los del dispositivo).
+      const movSeguro = get().pendientes.length > 0 ? {} : mov;
+      set({ negocios, negocioActivoId: activo, ...base, ...movSeguro, movDesde: desde, movHasta: hasta, config, miRol: info.rol, miNombre: info.nombre, esAdmin: info.rol === "dueño" || info.rol === "admin", cargando: false, cargado: true, saludoListo: true });
     } catch (e) {
       console.error(e);
       // Si hay datos guardados en el dispositivo, seguimos con esos (modo sin conexión).
@@ -292,6 +319,7 @@ export const useStore = create<State>()(
       if (!hayCache) avisarError("No se pudieron cargar los datos");
       set({ cargando: false, cargado: true, saludoListo: true });
     }
+    });
   },
 
   limpiar: () =>
@@ -311,6 +339,7 @@ export const useStore = create<State>()(
 
   setNegocioActivo: async (id) => {
     set({ negocioActivoId: id, cargando: true });
+    return enFila(async () => {
     try {
       const p = periodoDe("mes");
       const [base, mov, config, info] = await Promise.all([
@@ -319,11 +348,13 @@ export const useStore = create<State>()(
         db.cargarConfig(id),
         db.miInfo(id),
       ]);
+      if (get().negocioActivoId !== id) return; // se cambió a otro negocio mientras cargaba
       set({ ...base, ...mov, movDesde: p.desde, movHasta: p.hasta, config, miRol: info.rol, miNombre: info.nombre, esAdmin: info.rol === "dueño" || info.rol === "admin", cargando: false });
     } catch (e) {
       console.error(e);
       set({ cargando: false });
     }
+    });
   },
 
   // ---------- Ventas (optimista + cola offline) ----------

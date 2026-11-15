@@ -33,7 +33,7 @@ export default function Reportes() {
   // Cargar el periodo del reporte si aún no está en memoria
   useEffect(() => {
     asegurarRango(periodo.desde, periodo.hasta);
-  }, [periodo.desde, periodo.hasta, asegurarRango]);
+  }, [periodo.desde, periodo.hasta, asegurarRango, negocioId]);
 
   const datos = useMemo(() => {
     const v = filtrar(ventas, negocioId, periodo).filter((x) => metodosSel.has(x.metodo));

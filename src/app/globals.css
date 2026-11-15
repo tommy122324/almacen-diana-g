@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: #fdf8f1;
   --foreground: #171717;
 }
 
@@ -12,15 +12,33 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* La app usa siempre su tema cálido claro (el modo oscuro del sistema pintaba franjas negras). */
+:root {
+  color-scheme: light;
+}
+html {
+  background: #fdf8f1;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Celular: los campos de fecha (sobre todo en iPhone) se salían de la pantalla */
+input[type="date"] {
+  min-width: 0;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 44px;
+}
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+/* Evitar desplazamiento horizontal accidental en el celular */
+/* (clip, no hidden: así no se rompen los encabezados fijos) */
+body {
+  overflow-x: clip;
 }
