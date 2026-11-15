@@ -24,7 +24,7 @@ export default function Proveedores() {
   const [proveedores, setProveedores] = useState<pv.Proveedor[]>([]);
   const [cuentas, setCuentas] = useState<pv.CuentaPagar[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [errorCarga, setErrorCarga] = useState(false);
+  const [errorCarga, setErrorCarga] = useState("");
   const [editando, setEditando] = useState<pv.Proveedor | "nuevo" | null>(null);
   const [abierto, setAbierto] = useState<string | null>(null);
 
@@ -35,10 +35,11 @@ export default function Proveedores() {
       const [p, c] = await Promise.all([pv.listarProveedores(negocioId), pv.listarCuentasPagar(negocioId)]);
       setProveedores(p);
       setCuentas(c);
-      setErrorCarga(false);
+      setErrorCarga("");
     } catch (e) {
       console.error(e);
-      setErrorCarga(true);
+      const err = e as { message?: string; code?: string };
+      setErrorCarga(`${err.code ?? ""} ${err.message ?? String(e)}`.trim() || "Error desconocido");
     } finally {
       setCargando(false);
     }
@@ -160,7 +161,13 @@ export default function Proveedores() {
         </div>
       ) : errorCarga ? (
         <Card>
-          <p className="text-sm text-rose-600">No se pudieron cargar los proveedores. Si es la primera vez, ejecuta el SQL de proveedores en Supabase.</p>
+          <p className="text-sm text-rose-600">No se pudieron cargar los proveedores.</p>
+          <p className="mt-1 text-xs text-stone-500">
+            {/PGRST205|42P01|does not exist|schema cache/i.test(errorCarga)
+              ? "Las tablas aún no existen en Supabase: ejecuta completo el archivo supabase/fase7l_proveedores.sql en el SQL Editor. "
+              : "Detalle: "}
+            <span className="font-mono">{errorCarga}</span>
+          </p>
           <Boton variant="outline" className="mt-3" onClick={cargar}>
             Reintentar
           </Boton>

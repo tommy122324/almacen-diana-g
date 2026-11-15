@@ -477,6 +477,28 @@ export async function marcarReclamoRecibo(id: string, reclamo: string | null): P
   if (error) throw error;
 }
 
+/** Edita los datos del recibo (no modifica la venta registrada). */
+export async function editarRecibo(
+  id: string,
+  p: { fecha: string; cliente: string; telefono: string; detalle: string; metodo: MetodoPago; total: number; atendio: string },
+): Promise<void> {
+  const { error } = await db().from("recibos").update(p).eq("id", id);
+  if (error) throw error;
+}
+
+/** Recibos ya calificados por el cliente (más recientes primero). */
+export async function listarCalificaciones(negocioId: string): Promise<Recibo[]> {
+  const { data, error } = await db()
+    .from("recibos")
+    .select("*")
+    .eq("negocio_id", negocioId)
+    .not("calificacion", "is", null)
+    .order("calificado_en", { ascending: false })
+    .limit(1000);
+  if (error) throw error;
+  return (data ?? []).map(mRecibo);
+}
+
 export async function eliminarRecibo(id: string): Promise<void> {
   const { error } = await db().from("recibos").delete().eq("id", id);
   if (error) throw error;

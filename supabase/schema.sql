@@ -766,6 +766,16 @@ create policy pagos_proveedor_admin on public.pagos_proveedor for all
 grant select, insert, update, delete on public.proveedores, public.cuentas_pagar, public.pagos_proveedor to authenticated;
 grant all on public.proveedores, public.cuentas_pagar, public.pagos_proveedor to service_role;
 
+-- Fase 7m: calificaciones en tiempo real (recibos en Realtime)
+do $$
+begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'recibos') then
+    alter publication supabase_realtime add table public.recibos;
+  end if;
+end $$;
+-- Que la API vea de inmediato las tablas nuevas
+notify pgrst, 'reload schema';
+
 -- ============================================================
 -- Permisos para el rol de la app (la seguridad real la pone RLS)
 -- ============================================================

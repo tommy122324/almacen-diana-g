@@ -34,3 +34,16 @@ export function suscribirCambios(negocioId: string, onCambio: () => void): () =>
     supabase.removeChannel(canal);
   };
 }
+
+/** Escucha solo los recibos (calificaciones nuevas, ediciones). Solo admin los recibe por RLS. */
+export function suscribirRecibos(negocioId: string, onCambio: (fila: Record<string, unknown> | null) => void): () => void {
+  const supabase = createClient();
+  const canal = supabase.channel(`recibos-${negocioId}-${Math.random().toString(36).slice(2)}`);
+  canal.on("postgres_changes", { event: "*", schema: "public", table: "recibos", filter: `negocio_id=eq.${negocioId}` }, (p) =>
+    onCambio((p.new as Record<string, unknown>) ?? null),
+  );
+  canal.subscribe();
+  return () => {
+    supabase.removeChannel(canal);
+  };
+}

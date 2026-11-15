@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ReceiptText, Search, X, Plus, ChevronDown, ChevronRight, Send, AlertTriangle, Trash2, Check, FileText, Phone, Loader2, Star, Trophy } from "lucide-react";
+import { ReceiptText, Search, X, Plus, ChevronDown, ChevronRight, Send, AlertTriangle, Trash2, Check, FileText, Phone, Loader2, Star, Trophy, Pencil } from "lucide-react";
+import Link from "next/link";
+import { suscribirRecibos } from "@/lib/realtime";
 import { useStore } from "@/lib/store";
 import * as db from "@/lib/db";
 import { METODOS, METODO_LABEL, type MetodoPago, type Recibo } from "@/lib/types";
@@ -56,6 +58,12 @@ export default function Recibos() {
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  // Tiempo real: cuando un cliente califica o se edita un recibo en otro dispositivo
+  useEffect(() => {
+    if (!negocioId || !esAdmin) return;
+    return suscribirRecibos(negocioId, () => cargar());
+  }, [negocioId, esAdmin, cargar]);
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -158,13 +166,15 @@ export default function Recibos() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Recibos" value={filtrados.length} esConteo hint="En el rango" />
         <StatCard label="Total con recibo" value={totalRango} tone="green" />
-        <Card className="relative overflow-hidden p-4">
+        <Link href="/calificaciones" className="block rounded-2xl transition hover:-translate-y-0.5">
+        <Card className="relative h-full overflow-hidden p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-stone-400">Calificación</div>
           <div className="mt-1 flex items-center gap-1.5 text-2xl font-bold text-amber-600">
             {promedio ? promedio.toFixed(1).replace(".", ",") : "—"} <Star className="h-5 w-5 fill-amber-400 text-amber-400" />
           </div>
-          <div className="mt-0.5 text-xs text-stone-400">{calificados.length} calificación(es)</div>
+          <div className="mt-0.5 text-xs text-stone-400">{calificados.length} calificación(es) · <span className="font-semibold text-amber-700">Ver todas →</span></div>
         </Card>
+        </Link>
         <StatCard label="Reclamos / cambios" value={reclamos} tone={reclamos ? "red" : "default"} esConteo />
       </div>
 
@@ -266,6 +276,7 @@ export default function Recibos() {
 
 function FilaRecibo({ r, onVer, onBorrar, onActualizado }: { r: Recibo; onVer: () => void; onBorrar: () => void; onActualizado: (r: Recibo) => void }) {
   const [editReclamo, setEditReclamo] = useState(false);
+  const [editando, setEditando] = useState(false);
   const [nota, setNota] = useState(r.reclamo ?? "");
   const [guardando, setGuardando] = useState(false);
 
@@ -354,7 +365,18 @@ function FilaRecibo({ r, onVer, onBorrar, onActualizado }: { r: Recibo; onVer: (
         </div>
       )}
 
-      {!editReclamo && (
+      {editando && (
+        <EditarRecibo
+          r={r}
+          onCerrar={() => setEditando(false)}
+          onGuardado={(nuevo) => {
+            onActualizado(nuevo);
+            setEditando(false);
+          }}
+        />
+      )}
+
+      {!editReclamo && !editando && (
         <div className="mt-3 flex flex-wrap gap-2">
           <Boton onClick={onVer}>
             <Send className="h-4 w-4" /> Ver / enviar
@@ -362,11 +384,81 @@ function FilaRecibo({ r, onVer, onBorrar, onActualizado }: { r: Recibo; onVer: (
           <Boton variant="outline" onClick={() => setEditReclamo(true)}>
             <AlertTriangle className="h-4 w-4" /> {r.reclamo ? "Editar reclamo" : "Reclamo / cambio"}
           </Boton>
+          <Boton variant="outline" onClick={() => setEditando(true)}>
+            <Pencil className="h-4 w-4" /> Editar
+          </Boton>
           <Boton variant="ghost" onClick={onBorrar} className="ml-auto !text-stone-400 hover:!text-rose-500">
             <Trash2 className="h-4 w-4" />
           </Boton>
         </div>
       )}
     </Card>
+  );
+}
+
+function EditarRecibo({ r, onCerrar, onGuardado }: { r: Recibo; onCerrar: () => void; onGuardado: (r: Recibo) => void }) {
+  const [f, setF] = useState({ fecha: r.fecha, cliente: r.cliente, telefono: r.telefono, detalle: r.detalle, metodo: r.metodo, total: r.total, atendio: r.atendio });
+  const [guardando, setGuardando] = useState(false);
+  const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
+
+  async function guardar() {
+    if (!f.total) return avisarFalta("Escribe el total del recibo.");
+    setGuardando(true);
+    try {
+      const datos = { ...f, cliente: f.cliente.trim(), telefono: f.telefono.replace(/[^\d+]/g, ""), detalle: f.detalle.trim(), atendio: f.atendio.trim() };
+      await db.editarRecibo(r.id, datos);
+      onGuardado({ ...r, ...datos });
+      avisar("Recibo actualizado");
+    } catch (e) {
+      console.error(e);
+      avisarError("No se pudo guardar. Revisa tu conexión.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-2xl bg-[#fffaf2] p-3 ring-1 ring-amber-100">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Cliente">
+          <Input value={f.cliente} onChange={(e) => set("cliente", e.target.value)} />
+        </Field>
+        <Field label="WhatsApp">
+          <Input value={f.telefono} inputMode="tel" onChange={(e) => set("telefono", e.target.value)} />
+        </Field>
+        <Field label="Total">
+          <MoneyInput value={f.total} onChange={(v) => set("total", v)} />
+        </Field>
+        <Field label="Método de pago">
+          <Select value={f.metodo} onChange={(e) => set("metodo", e.target.value as MetodoPago)}>
+            {METODOS.map((m) => (
+              <option key={m} value={m}>
+                {METODO_LABEL[m]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Fecha">
+          <Input type="date" value={f.fecha} onChange={(e) => set("fecha", e.target.value)} />
+        </Field>
+        <Field label="¿Quién atendió?">
+          <Input value={f.atendio} onChange={(e) => set("atendio", e.target.value)} />
+        </Field>
+        <div className="sm:col-span-2">
+          <Field label="Descripción de la compra">
+            <textarea className={`${inputCls} min-h-[60px] resize-y`} value={f.detalle} onChange={(e) => set("detalle", e.target.value)} />
+          </Field>
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-stone-400">Solo cambia el recibo; la venta registrada en el día no se modifica.</p>
+      <div className="mt-3 flex justify-end gap-2">
+        <Boton variant="ghost" onClick={onCerrar}>
+          <X className="h-4 w-4" /> Cancelar
+        </Boton>
+        <Boton onClick={guardar} disabled={guardando}>
+          {guardando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Guardar cambios
+        </Boton>
+      </div>
+    </div>
   );
 }
