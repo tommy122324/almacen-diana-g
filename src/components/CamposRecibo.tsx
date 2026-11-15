@@ -9,9 +9,19 @@ export interface DatosRecibo {
   telefono: string;
   cliente: string;
   detalle: string;
+  atendio?: string; // quién atendió (para la calificación por vendedora)
 }
 
 export const reciboVacio: DatosRecibo = { telefono: "", cliente: "", detalle: "" };
+
+const CLAVE_ATENDIO = "cb-ultimo-atendio";
+export function ultimoAtendio(): string {
+  try {
+    return localStorage.getItem(CLAVE_ATENDIO) ?? "";
+  } catch {
+    return "";
+  }
+}
 
 const soloDigitos = (t: string) => t.replace(/\D/g, "").slice(-10);
 
@@ -43,8 +53,30 @@ function useClientesConocidos() {
 /** Campos del cliente para el recibo (WhatsApp, nombre, qué compró). */
 export function CamposRecibo({ datos, onChange }: { datos: DatosRecibo; onChange: (d: DatosRecibo) => void }) {
   const clientes = useClientesConocidos();
+  const negocioId = useStore((s) => s.negocioActivoId);
+  const miNombre = useStore((s) => s.miNombre);
+  const [nombresEquipo, setNombresEquipo] = useState<string[]>([]);
+  useEffect(() => {
+    if (!negocioId) return;
+    let vivo = true;
+    db.atendieronRecibos(negocioId).then((l) => vivo && setNombresEquipo(l));
+    return () => {
+      vivo = false;
+    };
+  }, [negocioId]);
+  // Por defecto: quien atendió la última vez en este dispositivo (o el usuario actual)
+  useEffect(() => {
+    if (datos.atendio === undefined) onChange({ ...datos, atendio: ultimoAtendio() || miNombre });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datos.atendio, miNombre]);
+  const sugerencias = [...new Set([miNombre, ...nombresEquipo].filter(Boolean))];
   return (
     <div className="grid gap-3 sm:grid-cols-2">
+      <datalist id="equipo-recibo">
+        {sugerencias.map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
       <datalist id="clientes-recibo">
         {[...clientes.values()].map((c) => (
           <option key={c.telefono} value={c.telefono}>{c.cliente}</option>
@@ -65,6 +97,9 @@ export function CamposRecibo({ datos, onChange }: { datos: DatosRecibo; onChange
       </Field>
       <Field label="Nombre del cliente (opcional)">
         <Input value={datos.cliente} onChange={(e) => onChange({ ...datos, cliente: e.target.value })} placeholder="Ej: María Gómez" />
+      </Field>
+      <Field label="¿Quién atendió? (para saber qué vendedora atiende mejor)">
+        <Input value={datos.atendio ?? ""} list="equipo-recibo" onChange={(e) => onChange({ ...datos, atendio: e.target.value })} placeholder="Ej: Diana" />
       </Field>
       <div className="sm:col-span-2">
         <Field label="¿Qué compró? (recomendado, sirve para cambios y reclamos)">
@@ -101,6 +136,11 @@ export async function crearReciboVenta(d: {
     detalle: d.datos.detalle.trim(),
     metodo: d.metodo,
     total: d.total,
-    atendio: d.atendio.trim(),
+    atendio: (d.datos.atendio ?? "").trim() || d.atendio.trim(),
+  }).then((r) => {
+    try {
+      if (d.datos.atendio?.trim()) localStorage.setItem(CLAVE_ATENDIO, d.datos.atendio.trim());
+    } catch {}
+    return r;
   });
 }

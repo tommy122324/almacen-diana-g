@@ -145,6 +145,9 @@ export interface Recibo {
   atendio: string;
   reclamo: string | null;
   reclamoEn: string | null;
+  calificacion?: number | null; // 1 a 5 estrellas (la pone el cliente)
+  comentario?: string | null;
+  calificadoEn?: string | null;
   creadoEn: string;
 }
 

@@ -400,8 +400,18 @@ function mRecibo(r: Row): Recibo {
     atendio: s(r.atendio),
     reclamo: r.reclamo ? s(r.reclamo) : null,
     reclamoEn: r.reclamo_en ? s(r.reclamo_en) : null,
+    calificacion: r.calificacion != null ? n(r.calificacion) : null,
+    comentario: r.comentario ? s(r.comentario) : null,
+    calificadoEn: r.calificado_en ? s(r.calificado_en) : null,
     creadoEn: s(r.creado_en),
   };
+}
+
+/** Nombres de quienes han atendido (para sugerir en "¿Quién atendió?"). */
+export async function atendieronRecibos(negocioId: string): Promise<string[]> {
+  const { data, error } = await db().from("recibos").select("atendio").eq("negocio_id", negocioId).neq("atendio", "").limit(1000);
+  if (error) return [];
+  return [...new Set((data ?? []).map((r) => s(r.atendio).trim()).filter(Boolean))];
 }
 
 /** Crea el recibo (número consecutivo asignado por el servidor). Requiere internet. */

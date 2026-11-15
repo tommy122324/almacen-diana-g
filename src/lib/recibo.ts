@@ -299,7 +299,7 @@ export function mensajeRecibo(r: Recibo, negocio: string, conLink = true) {
     `Aquí está tu recibo N° ${numeroRecibo(r.numero)} por ${formatCOP(r.total)}:`,
   ];
   if (conLink) lineas.push(linkRecibo(r));
-  lineas.push("", "Guárdalo para cualquier cambio o reclamo. ¡Te esperamos pronto!");
+  lineas.push("", "Guárdalo para cualquier cambio o reclamo. En el mismo enlace puedes calificar cómo te atendimos.", "", "¡Te esperamos pronto!");
   return lineas.join("\n");
 }
 

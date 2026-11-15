@@ -685,6 +685,39 @@ returns json language sql security definer stable set search_path = public as $$
 $$;
 grant execute on function public.recibo_publico(uuid) to anon, authenticated;
 
+-- Fase 7k: calificación del cliente en el recibo (1 a 5 estrellas + comentario)
+alter table public.recibos add column if not exists calificacion smallint;
+alter table public.recibos add column if not exists comentario text;
+alter table public.recibos add column if not exists calificado_en timestamptz;
+
+create or replace function public.calificar_recibo(p_id uuid, p_estrellas int, p_comentario text)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  if p_estrellas is null or p_estrellas < 1 or p_estrellas > 5 then return false; end if;
+  -- Solo se puede calificar una vez
+  update public.recibos
+     set calificacion = p_estrellas,
+         comentario = nullif(left(coalesce(p_comentario, ''), 500), ''),
+         calificado_en = now()
+   where id = p_id and calificacion is null;
+  return found;
+end $$;
+grant execute on function public.calificar_recibo(uuid, int, text) to anon, authenticated;
+
+create or replace function public.recibo_publico(p_id uuid)
+returns json language sql security definer stable set search_path = public as $$
+  select json_build_object(
+    'id', r.id, 'numero', r.numero, 'fecha', r.fecha, 'cliente', r.cliente, 'telefono', r.telefono,
+    'detalle', r.detalle, 'metodo', r.metodo, 'total', r.total, 'atendio', r.atendio, 'creado_en', r.creado_en,
+    'calificacion', r.calificacion, 'comentario', r.comentario,
+    'negocio', n.nombre, 'politica', c.politica_recibo, 'whatsapp', c.whatsapp)
+  from public.recibos r
+  join public.negocios n on n.id = r.negocio_id
+  left join public.configuracion c on c.negocio_id = r.negocio_id
+  where r.id = p_id;
+$$;
+grant execute on function public.recibo_publico(uuid) to anon, authenticated;
+
 -- ============================================================
 -- Permisos para el rol de la app (la seguridad real la pone RLS)
 -- ============================================================

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { obtenerReciboPublico, celularOculto } from "./datos";
 import { DescargarRecibo } from "./DescargarRecibo";
+import { CalificarRecibo } from "./CalificarRecibo";
 import { formatCOP, formatFechaLarga, formatFechaCorta } from "@/lib/format";
 import { METODO_LABEL, POLITICA_RECIBO_DEFECTO } from "@/lib/types";
 
@@ -60,6 +61,14 @@ export default async function ReciboPublicoPage({ params }: Props) {
   return (
     <main className="min-h-screen bg-[#fdf3e4] bg-[radial-gradient(ellipse_at_top,_#ffe7c2_0%,_transparent_60%)] px-4 py-8">
       <div className="mx-auto w-full max-w-md">
+        {!r.calificacion && (
+          <a
+            href="#calificar"
+            className="mb-4 flex items-center justify-center gap-2 rounded-2xl bg-white/80 px-4 py-2.5 text-sm font-semibold text-orange-700 shadow-sm ring-1 ring-orange-100"
+          >
+            ⭐ ¿Cómo te atendimos? Califica tu compra aquí ↓
+          </a>
+        )}
         <article className="overflow-hidden rounded-[2rem] bg-white shadow-[0_20px_50px_-15px_rgba(154,52,18,0.3)]">
           <header className="relative overflow-hidden bg-gradient-to-br from-amber-400 to-orange-500 px-6 pb-8 pt-7 text-center text-white">
             <span className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/15" />
@@ -116,6 +125,10 @@ export default async function ReciboPublicoPage({ params }: Props) {
             </div>
           </div>
         </article>
+
+        <div id="calificar" className="scroll-mt-4">
+          <CalificarRecibo id={r.id} inicial={r.calificacion ?? null} atendio={r.atendio} />
+        </div>
 
         <DescargarRecibo recibo={r} negocio={negocio} politica={d.politica} whatsapp={d.whatsapp} />
       </div>

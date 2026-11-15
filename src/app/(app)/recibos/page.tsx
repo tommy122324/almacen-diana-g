@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ReceiptText, Search, X, Plus, ChevronDown, ChevronRight, Send, AlertTriangle, Trash2, Check, FileText, Phone, Loader2 } from "lucide-react";
+import { ReceiptText, Search, X, Plus, ChevronDown, ChevronRight, Send, AlertTriangle, Trash2, Check, FileText, Phone, Loader2, Star, Trophy } from "lucide-react";
 import { useStore } from "@/lib/store";
 import * as db from "@/lib/db";
 import { METODOS, METODO_LABEL, type MetodoPago, type Recibo } from "@/lib/types";
@@ -71,6 +71,25 @@ export default function Recibos() {
 
   const totalRango = filtrados.reduce((s, r) => s + r.total, 0);
   const reclamos = filtrados.filter((r) => r.reclamo).length;
+  const calificados = filtrados.filter((r) => r.calificacion);
+  const promedio = calificados.length ? calificados.reduce((s, r) => s + (r.calificacion ?? 0), 0) / calificados.length : 0;
+  // Ranking por quién atendió
+  const ranking = useMemo(() => {
+    const m = new Map<string, { suma: number; n: number; recibos: number }>();
+    for (const r of filtrados) {
+      const k = r.atendio.trim() || "Sin nombre";
+      const x = m.get(k) ?? { suma: 0, n: 0, recibos: 0 };
+      x.recibos++;
+      if (r.calificacion) {
+        x.suma += r.calificacion;
+        x.n++;
+      }
+      m.set(k, x);
+    }
+    return [...m.entries()]
+      .map(([nombre, x]) => ({ nombre, promedio: x.n ? x.suma / x.n : 0, calificaciones: x.n, recibos: x.recibos }))
+      .sort((a, b) => b.promedio - a.promedio || b.calificaciones - a.calificaciones);
+  }, [filtrados]);
 
   async function crearManual() {
     if (!negocioId) return;
@@ -136,11 +155,38 @@ export default function Recibos() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Recibos" value={filtrados.length} esConteo hint="En el rango" />
         <StatCard label="Total con recibo" value={totalRango} tone="green" />
+        <Card className="relative overflow-hidden p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-stone-400">Calificación</div>
+          <div className="mt-1 flex items-center gap-1.5 text-2xl font-bold text-amber-600">
+            {promedio ? promedio.toFixed(1).replace(".", ",") : "—"} <Star className="h-5 w-5 fill-amber-400 text-amber-400" />
+          </div>
+          <div className="mt-0.5 text-xs text-stone-400">{calificados.length} calificación(es)</div>
+        </Card>
         <StatCard label="Reclamos / cambios" value={reclamos} tone={reclamos ? "red" : "default"} esConteo />
       </div>
+
+      {calificados.length > 0 && (
+        <Card>
+          <div className="mb-3 flex items-center gap-2 font-semibold text-stone-800">
+            <Trophy className="h-4 w-4 text-amber-600" /> ¿Quién atiende mejor?
+          </div>
+          <div className="space-y-2">
+            {ranking.map((x, i) => (
+              <div key={x.nombre} className="flex items-center gap-3 rounded-xl bg-[#fffaf2] px-3 py-2">
+                <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === 0 && x.calificaciones ? "bg-gradient-to-br from-amber-400 to-orange-500 text-white" : "bg-white text-stone-500 ring-1 ring-amber-100"}`}>{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate font-semibold text-stone-800">{x.nombre}</span>
+                <span className="text-xs text-stone-500">{x.recibos} venta(s) · {x.calificaciones} calif.</span>
+                <span className="flex items-center gap-1 font-bold text-amber-600">
+                  {x.calificaciones ? x.promedio.toFixed(1).replace(".", ",") : "—"} <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Recibo manual */}
       <Card>
@@ -249,6 +295,15 @@ function FilaRecibo({ r, onVer, onBorrar, onActualizado }: { r: Recibo; onVer: (
             <span className="font-semibold text-stone-800">{r.cliente || "Cliente"}</span>
             <Chip tone="stone">{METODO_LABEL[r.metodo] ?? r.metodo}</Chip>
             {r.reclamo && <Chip tone="red">Reclamo</Chip>}
+            {r.calificacion ? (
+              <span className="flex items-center gap-0.5" title={`${r.calificacion} de 5`}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <Star key={n} className={`h-3.5 w-3.5 ${n <= (r.calificacion ?? 0) ? "fill-amber-400 text-amber-400" : "text-stone-200"}`} />
+                ))}
+              </span>
+            ) : (
+              <span className="text-[11px] text-stone-400">Sin calificar</span>
+            )}
           </div>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-stone-500">
             <span>{formatFechaCorta(r.fecha)}</span>
@@ -260,6 +315,7 @@ function FilaRecibo({ r, onVer, onBorrar, onActualizado }: { r: Recibo; onVer: (
             {r.atendio && <span>Atendió: {r.atendio}</span>}
           </div>
           {r.detalle && <p className="mt-1 line-clamp-2 text-sm text-stone-600">{r.detalle}</p>}
+          {r.comentario && <p className="mt-1 rounded-lg bg-amber-50 px-2 py-1 text-xs italic text-stone-600">“{r.comentario}”</p>}
         </div>
         <div className="shrink-0 text-right font-bold tabular-nums text-stone-800">{formatCOP(r.total)}</div>
       </div>

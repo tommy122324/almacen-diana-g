@@ -7,7 +7,7 @@ import { interpretarDictado, mejorInterpretacion, crearReconocimiento, type Item
 import { avisar, avisarFalta, avisarError } from "@/lib/alerta";
 import { MoneyInput } from "@/components/MoneyInput";
 import { Boton, Input, Select, inputCls } from "@/components/ui";
-import { crearReciboVenta } from "@/components/CamposRecibo";
+import { crearReciboVenta, ultimoAtendio } from "@/components/CamposRecibo";
 import { ReciboModal } from "@/components/ReciboModal";
 import { formatCOP } from "@/lib/format";
 
@@ -167,7 +167,7 @@ export function DictadoVoz({ fecha }: { fecha: string }) {
                 fecha,
                 metodo: it.metodo,
                 total: it.monto,
-                atendio: miNombre,
+                atendio: ultimoAtendio() || miNombre,
                 datos: { telefono: it.telefono, cliente: it.cliente, detalle: it.concepto },
               });
             } catch {

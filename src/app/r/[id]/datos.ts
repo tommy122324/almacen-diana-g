@@ -36,6 +36,8 @@ export async function obtenerReciboPublico(id: string): Promise<ReciboPublico | 
       atendio: s(r.atendio),
       reclamo: null,
       reclamoEn: null,
+      calificacion: r.calificacion != null ? Number(r.calificacion) : null,
+      comentario: r.comentario ? s(r.comentario) : null,
       creadoEn: s(r.creado_en),
     },
     negocio: s(r.negocio) || "Almacén",
