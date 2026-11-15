@@ -127,7 +127,28 @@ export interface Configuracion {
   whatsapp: string; // número de WhatsApp del almacén
   correoCodigos: string; // correo a donde llegan los códigos (Fase 7)
   salarioMinimo: number; // salario mínimo mensual (para calcular descuentos por retraso)
+  politicaRecibo?: string; // texto de cambios/garantía que sale en el recibo
 }
+
+export interface Recibo {
+  id: string;
+  negocioId: string;
+  numero: number;
+  ventaId: string | null;
+  fecha: string;
+  cliente: string;
+  telefono: string;
+  detalle: string;
+  metodo: MetodoPago;
+  total: number;
+  atendio: string;
+  reclamo: string | null;
+  reclamoEn: string | null;
+  creadoEn: string;
+}
+
+export const POLITICA_RECIBO_DEFECTO =
+  "Cambios dentro de los 8 días siguientes a la compra, presentando este recibo y la prenda con su etiqueta, sin uso ni lavado.";
 
 export interface RegistroHora {
   id: string;

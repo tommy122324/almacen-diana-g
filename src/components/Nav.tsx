@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
-import { LayoutDashboard, NotebookPen, Package, FileBarChart, Settings, Clock, ListChecks, Receipt, ClipboardList } from "lucide-react";
+import { LayoutDashboard, NotebookPen, Package, FileBarChart, Settings, Clock, ListChecks, Receipt, ClipboardList, ReceiptText } from "lucide-react";
 import { useStore } from "@/lib/store";
 
 const items = [
@@ -13,6 +13,7 @@ const items = [
   { href: "/tareas", label: "Tareas", corto: "Tareas", icon: ListChecks, soloAdmin: false, menuPerfil: false },
   { href: "/nomina", label: "Nómina", corto: "Nómina", icon: Clock, soloAdmin: false, menuPerfil: false },
   // En celular, estos viven en el menú de perfil (no en la barra inferior)
+  { href: "/recibos", label: "Recibos", corto: "Recibos", icon: ReceiptText, soloAdmin: true, menuPerfil: true },
   { href: "/gastos-mensuales", label: "Gastos Mensuales", corto: "Gastos", icon: Receipt, soloAdmin: true, menuPerfil: true },
   { href: "/reportes", label: "Reportes", corto: "Reportes", icon: FileBarChart, soloAdmin: true, menuPerfil: true },
   { href: "/ajustes", label: "Ajustes", corto: "Ajustes", icon: Settings, soloAdmin: true, menuPerfil: true },

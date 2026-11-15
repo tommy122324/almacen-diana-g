@@ -1,14 +1,16 @@
 "use client";
 import { useMemo, useState, useRef, useEffect } from "react";
-import { Trash2, Plus, Pencil, Check, X, BarChart3 } from "lucide-react";
+import { Trash2, Plus, Pencil, Check, X, BarChart3, ReceiptText } from "lucide-react";
 import { useStore, cajaAyerDe } from "@/lib/store";
-import { METODOS, METODO_LABEL, type MetodoPago } from "@/lib/types";
+import { METODOS, METODO_LABEL, type MetodoPago, type Recibo } from "@/lib/types";
 import { formatCOP, formatFechaLarga } from "@/lib/format";
 import { hoyISO } from "@/lib/calc";
-import { avisar, confirmarEliminar, avisarFalta } from "@/lib/alerta";
+import { avisar, confirmarEliminar, avisarFalta, avisarError } from "@/lib/alerta";
 import { MoneyInput } from "@/components/MoneyInput";
 import { IngresosMetodoChart } from "@/components/Charts";
 import { Card, Boton, Select, Input } from "@/components/ui";
+import { CamposRecibo, crearReciboVenta, reciboVacio, type DatosRecibo } from "@/components/CamposRecibo";
+import { ReciboModal } from "@/components/ReciboModal";
 
 export default function RegistroDia() {
   const [fecha, setFecha] = useState(hoyISO());
@@ -24,6 +26,21 @@ export default function RegistroDia() {
   const cuadres = useStore((s) => s.cuadres);
 
   const agregarVenta = useStore((s) => s.agregarVenta);
+  const miNombre = useStore((s) => s.miNombre);
+  const [reciboAbierto, setReciboAbierto] = useState<Recibo | null>(null);
+
+  async function registrarVenta(m: MetodoPago, monto: number, rec?: DatosRecibo) {
+    const ventaId = await agregarVenta(fecha, m, monto);
+    avisar("Venta agregada");
+    if (!rec || !ventaId || !negocioId) return;
+    try {
+      const r = await crearReciboVenta({ negocioId, ventaId, fecha, metodo: m, total: monto, atendio: miNombre, datos: rec });
+      setReciboAbierto(r);
+    } catch (e) {
+      console.error(e);
+      avisarError("La venta quedó guardada, pero el recibo no se pudo crear (¿sin internet?). Puedes crearlo luego en Recibos.");
+    }
+  }
   const editarVenta = useStore((s) => s.editarVenta);
   const eliminarVenta = useStore((s) => s.eliminarVenta);
   const agregarGasto = useStore((s) => s.agregarGasto);
@@ -115,6 +132,7 @@ export default function RegistroDia() {
 
   return (
     <div className="space-y-5">
+      {reciboAbierto && <ReciboModal recibo={reciboAbierto} onCerrar={() => setReciboAbierto(null)} />}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-stone-800">Registro del día</h1>
@@ -139,7 +157,7 @@ export default function RegistroDia() {
       {/* Ventas */}
       <Card>
         <h2 className="mb-3 font-semibold text-stone-800">Ventas por método de pago</h2>
-        <AgregarVenta onAdd={(m, monto) => { agregarVenta(fecha, m, monto); avisar("Venta agregada"); }} />
+        <AgregarVenta conRecibo={esAdmin} onAdd={registrarVenta} />
         <div className="mt-3 space-y-1">
           {dia.ventas.length === 0 && <Vacio texto="Aún no hay ventas registradas hoy." />}
           {dia.ventas.map((v) => (
@@ -423,18 +441,46 @@ function FilaConcepto({
   );
 }
 
-function AgregarVenta({ onAdd }: { onAdd: (m: MetodoPago, monto: number) => void }) {
+function AgregarVenta({ onAdd, conRecibo }: { onAdd: (m: MetodoPago, monto: number, rec?: DatosRecibo) => void; conRecibo: boolean }) {
   const [metodo, setMetodo] = useState<MetodoPago>("efectivo");
   const [monto, setMonto] = useState(0);
+  const [recibo, setRecibo] = useState(false);
+  const [datos, setDatos] = useState<DatosRecibo>(reciboVacio);
   function add() {
     if (monto <= 0) {
       avisarFalta("Escribe el monto de la venta.");
       return;
     }
-    onAdd(metodo, monto);
+    if (recibo && datos.telefono.replace(/\D/g, "").length < 7) {
+      avisarFalta("Escribe el WhatsApp del cliente para enviarle el recibo.");
+      return;
+    }
+    onAdd(metodo, monto, recibo ? datos : undefined);
     setMonto(0);
+    if (recibo) {
+      setDatos(reciboVacio);
+      setRecibo(false);
+    }
   }
   return (
+    <div className="space-y-3">
+    {conRecibo && (
+      <button
+        type="button"
+        onClick={() => setRecibo((v) => !v)}
+        className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${recibo ? "border-emerald-300 bg-emerald-50" : "border-amber-100 bg-amber-50/50 hover:bg-amber-50"}`}
+      >
+        <ReceiptText className={`h-5 w-5 shrink-0 ${recibo ? "text-emerald-600" : "text-amber-600"}`} />
+        <span className="flex-1">
+          <span className="block text-sm font-semibold text-stone-800">Enviar recibo al cliente</span>
+          <span className="block text-xs text-stone-500">Imagen del recibo para mandarle por WhatsApp</span>
+        </span>
+        <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${recibo ? "bg-emerald-500" : "bg-stone-300"}`}>
+          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${recibo ? "left-[22px]" : "left-0.5"}`} />
+        </span>
+      </button>
+    )}
+    {conRecibo && recibo && <CamposRecibo datos={datos} onChange={setDatos} />}
     <div className="flex flex-col gap-2 sm:flex-row">
       <Select value={metodo} onChange={(e) => setMetodo(e.target.value as MetodoPago)} className="sm:w-52">
         {METODOS.map((m) => (
@@ -443,8 +489,9 @@ function AgregarVenta({ onAdd }: { onAdd: (m: MetodoPago, monto: number) => void
       </Select>
       <MoneyInput value={monto} onChange={setMonto} onEnter={add} className="flex-1" />
       <Boton onClick={add}>
-        <Plus className="h-4 w-4" /> Agregar
+        <Plus className="h-4 w-4" /> {recibo ? "Agregar y crear recibo" : "Agregar"}
       </Boton>
+    </div>
     </div>
   );
 }

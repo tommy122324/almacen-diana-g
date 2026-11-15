@@ -16,6 +16,7 @@ import type {
   Meta,
   Cuadre,
   Configuracion,
+  Recibo,
   RegistroHora,
   Tarea,
   OpPendiente,
@@ -363,7 +364,7 @@ export async function upsertMeta(m: { negocioId: string; anio: number; mes: numb
 export async function cargarConfig(negocioId: string): Promise<Configuracion> {
   const { data, error } = await db().from("configuracion").select("*").eq("negocio_id", negocioId).maybeSingle();
   if (error) throw error;
-  return { whatsapp: s(data?.whatsapp), correoCodigos: s(data?.correo_codigos), salarioMinimo: n(data?.salario_minimo) };
+  return { whatsapp: s(data?.whatsapp), correoCodigos: s(data?.correo_codigos), salarioMinimo: n(data?.salario_minimo), politicaRecibo: s(data?.politica_recibo) };
 }
 
 export async function guardarConfig(negocioId: string, patch: Partial<Configuracion>): Promise<Configuracion> {
@@ -373,11 +374,101 @@ export async function guardarConfig(negocioId: string, patch: Partial<Configurac
     whatsapp: patch.whatsapp ?? actual.whatsapp,
     correo_codigos: patch.correoCodigos ?? actual.correoCodigos,
     salario_minimo: patch.salarioMinimo ?? actual.salarioMinimo,
+    // Solo se envía si se cambió (así guardar otros ajustes nunca depende de esta columna)
+    ...(patch.politicaRecibo !== undefined ? { politica_recibo: patch.politicaRecibo } : {}),
     actualizado_en: new Date().toISOString(),
   };
   const { data, error } = await db().from("configuracion").upsert(fila, { onConflict: "negocio_id" }).select().single();
   if (error) throw error;
-  return { whatsapp: s(data.whatsapp), correoCodigos: s(data.correo_codigos), salarioMinimo: n(data.salario_minimo) };
+  return { whatsapp: s(data.whatsapp), correoCodigos: s(data.correo_codigos), salarioMinimo: n(data.salario_minimo), politicaRecibo: s(data.politica_recibo) };
+}
+
+// ---------- Recibos (Fase 7h) ----------
+function mRecibo(r: Row): Recibo {
+  return {
+    id: s(r.id),
+    negocioId: s(r.negocio_id),
+    numero: n(r.numero),
+    ventaId: r.venta_id ? s(r.venta_id) : null,
+    fecha: s(r.fecha),
+    cliente: s(r.cliente),
+    telefono: s(r.telefono),
+    detalle: s(r.detalle),
+    metodo: (r.metodo as MetodoPago) ?? "efectivo",
+    total: n(r.total),
+    atendio: s(r.atendio),
+    reclamo: r.reclamo ? s(r.reclamo) : null,
+    reclamoEn: r.reclamo_en ? s(r.reclamo_en) : null,
+    creadoEn: s(r.creado_en),
+  };
+}
+
+/** Crea el recibo (número consecutivo asignado por el servidor). Requiere internet. */
+export async function crearRecibo(d: {
+  id: string;
+  negocioId: string;
+  ventaId: string | null;
+  fecha: string;
+  cliente: string;
+  telefono: string;
+  detalle: string;
+  metodo: MetodoPago;
+  total: number;
+  atendio: string;
+}): Promise<Recibo> {
+  const { data, error } = await db().rpc("crear_recibo", {
+    p_id: d.id,
+    p_negocio: d.negocioId,
+    p_venta: d.ventaId,
+    p_fecha: d.fecha,
+    p_cliente: d.cliente,
+    p_telefono: d.telefono,
+    p_detalle: d.detalle,
+    p_metodo: d.metodo,
+    p_total: d.total,
+    p_atendio: d.atendio,
+  });
+  if (error) throw error;
+  return mRecibo(data as Row);
+}
+
+export async function listarRecibos(negocioId: string, desde: string, hasta: string): Promise<Recibo[]> {
+  const { data, error } = await db()
+    .from("recibos")
+    .select("*")
+    .eq("negocio_id", negocioId)
+    .gte("fecha", desde)
+    .lte("fecha", hasta)
+    .order("numero", { ascending: false })
+    .limit(2000);
+  if (error) throw error;
+  return (data ?? []).map(mRecibo);
+}
+
+/** Clientes que ya tienen recibo (para autocompletar nombre por número). */
+export async function clientesRecibos(negocioId: string): Promise<{ telefono: string; cliente: string }[]> {
+  const { data, error } = await db()
+    .from("recibos")
+    .select("telefono, cliente")
+    .eq("negocio_id", negocioId)
+    .neq("telefono", "")
+    .order("creado_en", { ascending: false })
+    .limit(1000);
+  if (error) return [];
+  return (data ?? []).map((r) => ({ telefono: s(r.telefono), cliente: s(r.cliente) }));
+}
+
+export async function marcarReclamoRecibo(id: string, reclamo: string | null): Promise<void> {
+  const { error } = await db()
+    .from("recibos")
+    .update({ reclamo, reclamo_en: reclamo ? new Date().toISOString() : null })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function eliminarRecibo(id: string): Promise<void> {
+  const { error } = await db().from("recibos").delete().eq("id", id);
+  if (error) throw error;
 }
 
 // ---------- Nómina / Registro de hora (Fase 7c) ----------

@@ -96,7 +96,7 @@ interface State {
   crearNegocio: (nombre: string) => Promise<string | null>;
   setNegocioActivo: (id: string) => Promise<void>;
 
-  agregarVenta: (fecha: string, metodo: MetodoPago, monto: number) => Promise<void>;
+  agregarVenta: (fecha: string, metodo: MetodoPago, monto: number) => Promise<string | undefined>;
   editarVenta: (id: string, metodo: MetodoPago, monto: number) => Promise<void>;
   eliminarVenta: (id: string) => Promise<void>;
 
@@ -139,7 +139,7 @@ interface State {
 let colaRango: Promise<void> = Promise.resolve();
 
 /** Genera un id único en el dispositivo (para que la nube nunca duplique un registro). */
-function uuid(): string {
+export function uuid(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
 }
@@ -334,6 +334,7 @@ export const useStore = create<State>()(
     const v: Venta = { id, negocioId, fecha, metodo, monto, creadoEn: new Date().toISOString() };
     set((s) => ({ ventas: [...s.ventas, v] }));
     get().encolar({ tabla: "ventas", tipo: "insert", payload: { id, negocio_id: negocioId, fecha, metodo, monto } });
+    return id;
   },
   editarVenta: async (id, metodo, monto) => {
     if (monto <= 0) return;

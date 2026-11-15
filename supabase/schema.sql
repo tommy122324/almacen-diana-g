@@ -610,6 +610,65 @@ end $$;
 alter table public.apartados add column if not exists lugar text;
 
 -- ============================================================
+-- Fase 7h: Recibos de venta (imagen para enviar por WhatsApp)
+-- Solo AGREGA una tabla nueva y una columna opcional. No modifica ventas.
+-- ============================================================
+alter table public.configuracion add column if not exists politica_recibo text;
+
+create table if not exists public.recibos (
+  id          uuid primary key default gen_random_uuid(),
+  negocio_id  uuid not null references public.negocios(id) on delete cascade,
+  numero      int  not null,                 -- consecutivo por negocio (0001, 0002…)
+  venta_id    uuid,                           -- venta asociada (sin FK: borrar el recibo no toca la venta)
+  fecha       date not null default public.hoy_bogota(),
+  cliente     text not null default '',
+  telefono    text not null default '',
+  detalle     text not null default '',
+  metodo      text not null default 'efectivo',
+  total       bigint not null default 0,
+  atendio     text not null default '',
+  reclamo     text,                           -- nota de reclamo / cambio
+  reclamo_en  timestamptz,
+  creado_por  uuid references auth.users(id) default auth.uid(),
+  creado_en   timestamptz not null default now(),
+  unique (negocio_id, numero)
+);
+create index if not exists idx_recibos_neg_fecha on public.recibos(negocio_id, fecha);
+alter table public.recibos enable row level security;
+-- Solo el administrador ve y maneja los recibos.
+drop policy if exists recibos_admin on public.recibos;
+create policy recibos_admin on public.recibos for all
+  using (public.es_admin(negocio_id)) with check (public.es_admin(negocio_id));
+grant select, insert, update, delete on public.recibos to authenticated;
+grant all on public.recibos to service_role;
+
+-- Crea un recibo con el siguiente número consecutivo del negocio (sin choques entre dispositivos).
+create or replace function public.crear_recibo(
+  p_id uuid, p_negocio uuid, p_venta uuid, p_fecha date,
+  p_cliente text, p_telefono text, p_detalle text, p_metodo text, p_total bigint, p_atendio text
+) returns public.recibos
+language plpgsql security definer set search_path = public as $$
+declare
+  r public.recibos;
+  n int;
+begin
+  if not public.es_admin(p_negocio) then
+    raise exception 'Solo el administrador puede crear recibos';
+  end if;
+  -- Idempotente: si ya existe (reintento), devolverlo tal cual.
+  select * into r from public.recibos where id = p_id;
+  if found then return r; end if;
+  perform pg_advisory_xact_lock(hashtext('recibos-' || p_negocio::text));
+  select coalesce(max(numero), 0) + 1 into n from public.recibos where negocio_id = p_negocio;
+  insert into public.recibos (id, negocio_id, numero, venta_id, fecha, cliente, telefono, detalle, metodo, total, atendio, creado_por)
+  values (p_id, p_negocio, n, p_venta, coalesce(p_fecha, public.hoy_bogota()), coalesce(p_cliente, ''), coalesce(p_telefono, ''),
+          coalesce(p_detalle, ''), coalesce(p_metodo, 'efectivo'), coalesce(p_total, 0), coalesce(p_atendio, ''), auth.uid())
+  returning * into r;
+  return r;
+end $$;
+grant execute on function public.crear_recibo(uuid, uuid, uuid, date, text, text, text, text, bigint, text) to authenticated;
+
+-- ============================================================
 -- Permisos para el rol de la app (la seguridad real la pone RLS)
 -- ============================================================
 grant usage on schema public to anon, authenticated;

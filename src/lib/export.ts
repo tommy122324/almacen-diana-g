@@ -2,7 +2,7 @@
 // Las librerías pesadas (exceljs, jspdf) se cargan SOLO al exportar (import dinámico),
 // para que la app inicie más liviana y rápida.
 import { METODOS, METODO_LABEL } from "./types";
-import type { Venta, Gasto, Entrada, Apartado, RegistroHora, GastoMensual } from "./types";
+import type { Venta, Gasto, Entrada, Apartado, RegistroHora, GastoMensual, Recibo } from "./types";
 import type { Resumen, Periodo } from "./calc";
 import { variacion } from "./calc";
 import { formatCOP, formatFechaCorta } from "./format";
@@ -403,6 +403,44 @@ export async function exportarPedidosPorLugarPDF(negocio: string, pedidos: Apart
   }
 
   doc.save(`Pedidos_por_lugar_${negocio.replace(/[^\w]+/g, "_")}.pdf`);
+}
+
+/** PDF con la lista de recibos de un rango. */
+export async function exportarRecibosPDF(negocio: string, recibos: Recibo[], desde: string, hasta: string) {
+  const { default: jsPDF } = await import("jspdf");
+  const { default: autoTable } = await import("jspdf-autotable");
+  const doc = new jsPDF();
+  const M = 14;
+  const total = recibos.reduce((s, r) => s + r.total, 0);
+  doc.setFontSize(16);
+  doc.text(`Recibos — ${negocio}`, M, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text(`Del ${formatFechaCorta(desde)} al ${formatFechaCorta(hasta)} · ${recibos.length} recibo(s) · Total ${formatCOP(total)}`, M, 25);
+  doc.setTextColor(0);
+  autoTable(doc, {
+    startY: 30,
+    head: [["N°", "Fecha", "Cliente", "WhatsApp", "Detalle", "Método", "Total", "Reclamo"]],
+    body: recibos
+      .slice()
+      .sort((a, b) => a.numero - b.numero)
+      .map((r) => [
+        String(r.numero).padStart(4, "0"),
+        formatFechaCorta(r.fecha),
+        r.cliente || "-",
+        r.telefono || "-",
+        r.detalle || "-",
+        METODO_LABEL[r.metodo] ?? r.metodo,
+        formatCOP(r.total),
+        r.reclamo || "",
+      ]),
+    theme: "striped",
+    headStyles: { fillColor: [234, 88, 12] },
+    styles: { fontSize: 8, cellPadding: 2 },
+    columnStyles: { 4: { cellWidth: 45 }, 7: { cellWidth: 30 } },
+    margin: { left: M, right: M },
+  });
+  doc.save(`Recibos_${negocio.replace(/[^\w]+/g, "_")}.pdf`);
 }
 
 interface DatosComparativo {

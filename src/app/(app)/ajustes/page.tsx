@@ -1,12 +1,13 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { MessageCircle, Save, Check, Lock, KeyRound, RefreshCw, Trash2, DatabaseBackup, Download, Upload, FileSpreadsheet } from "lucide-react";
+import { ReceiptText, MessageCircle, Save, Check, Lock, KeyRound, RefreshCw, Trash2, DatabaseBackup, Download, Upload, FileSpreadsheet } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { avisar, avisarError, confirmar } from "@/lib/alerta";
 import { telefonoWhatsApp } from "@/lib/whatsapp";
 import { generarCodigo, codigoActivo, cancelarCodigo } from "@/lib/db";
 import { descargarRespaldoJSON, descargarRespaldoExcel, restaurarRespaldoDesdeArchivo } from "@/lib/backup";
-import { Card, Boton, Input, Field } from "@/components/ui";
+import { Card, Boton, Input, Field, inputCls } from "@/components/ui";
+import { POLITICA_RECIBO_DEFECTO } from "@/lib/types";
 import { MoneyInput } from "@/components/MoneyInput";
 import { GestionUsuarios } from "@/components/GestionUsuarios";
 
@@ -86,6 +87,8 @@ export default function Ajustes() {
           guardado como el número oficial del almacén.
         </div>
       </Card>
+
+      <PoliticaRecibo />
 
       <CodigosAdmin />
 
@@ -240,6 +243,45 @@ function CodigosAdmin() {
             <Trash2 className="h-4 w-4" /> Cancelar código
           </Boton>
         )}
+      </div>
+    </Card>
+  );
+}
+
+/** Texto de cambios y garantías que sale en el recibo del cliente. */
+function PoliticaRecibo() {
+  const config = useStore((s) => s.config);
+  const setConfig = useStore((s) => s.setConfig);
+  const [texto, setTexto] = useState(config.politicaRecibo || POLITICA_RECIBO_DEFECTO);
+  const [guardando, setGuardando] = useState(false);
+
+  async function guardar() {
+    setGuardando(true);
+    try {
+      await setConfig({ politicaRecibo: texto.trim() });
+      avisar("Política de cambios guardada");
+    } catch {
+      avisarError("No se pudo guardar");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <Card>
+      <div className="mb-3 flex items-center gap-2 font-semibold text-stone-800">
+        <ReceiptText className="h-5 w-5 text-amber-600" /> Recibos: política de cambios
+      </div>
+      <Field label="Este texto sale al final de cada recibo que se envía al cliente">
+        <textarea className={`${inputCls} min-h-[80px] resize-y`} value={texto} onChange={(e) => setTexto(e.target.value)} />
+      </Field>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Boton onClick={guardar} disabled={guardando}>
+          <Save className="h-4 w-4" /> Guardar
+        </Boton>
+        <Boton variant="ghost" onClick={() => setTexto(POLITICA_RECIBO_DEFECTO)}>
+          Usar texto sugerido
+        </Boton>
       </div>
     </Card>
   );
