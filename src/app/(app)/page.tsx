@@ -6,6 +6,7 @@ import { useStore, saldoDe } from "@/lib/store";
 import { StatCard, Card, Boton, Input } from "@/components/ui";
 import { VentasBarChart, MetodosPieChart, ComparativoChart } from "@/components/Charts";
 import { MoneyInput } from "@/components/MoneyInput";
+import { AnalisisInteligente } from "@/components/AnalisisInteligente";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { METODO_LABEL, type MetodoPago } from "@/lib/types";
 import { avisar } from "@/lib/alerta";
@@ -236,6 +237,9 @@ export default function Panel() {
           ))}
         </ul>
       </Card>
+
+      {/* Análisis inteligente (solo admin) */}
+      {esAdmin && <AnalisisInteligente />}
 
       {/* Meta y apartados */}
       <div className="grid gap-3 md:grid-cols-2">
