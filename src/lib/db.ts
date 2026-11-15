@@ -364,7 +364,7 @@ export async function upsertMeta(m: { negocioId: string; anio: number; mes: numb
 export async function cargarConfig(negocioId: string): Promise<Configuracion> {
   const { data, error } = await db().from("configuracion").select("*").eq("negocio_id", negocioId).maybeSingle();
   if (error) throw error;
-  return { whatsapp: s(data?.whatsapp), correoCodigos: s(data?.correo_codigos), salarioMinimo: n(data?.salario_minimo), politicaRecibo: s(data?.politica_recibo) };
+  return { whatsapp: s(data?.whatsapp), whatsapp2: s(data?.whatsapp2), correoCodigos: s(data?.correo_codigos), salarioMinimo: n(data?.salario_minimo), politicaRecibo: s(data?.politica_recibo) };
 }
 
 export async function guardarConfig(negocioId: string, patch: Partial<Configuracion>): Promise<Configuracion> {
@@ -376,11 +376,12 @@ export async function guardarConfig(negocioId: string, patch: Partial<Configurac
     salario_minimo: patch.salarioMinimo ?? actual.salarioMinimo,
     // Solo se envía si se cambió (así guardar otros ajustes nunca depende de esta columna)
     ...(patch.politicaRecibo !== undefined ? { politica_recibo: patch.politicaRecibo } : {}),
+    ...(patch.whatsapp2 !== undefined ? { whatsapp2: patch.whatsapp2 } : {}),
     actualizado_en: new Date().toISOString(),
   };
   const { data, error } = await db().from("configuracion").upsert(fila, { onConflict: "negocio_id" }).select().single();
   if (error) throw error;
-  return { whatsapp: s(data.whatsapp), correoCodigos: s(data.correo_codigos), salarioMinimo: n(data.salario_minimo), politicaRecibo: s(data.politica_recibo) };
+  return { whatsapp: s(data.whatsapp), whatsapp2: s(data.whatsapp2), correoCodigos: s(data.correo_codigos), salarioMinimo: n(data.salario_minimo), politicaRecibo: s(data.politica_recibo) };
 }
 
 // ---------- Recibos (Fase 7h) ----------

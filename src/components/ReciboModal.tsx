@@ -4,6 +4,7 @@ import { X, Send, Download, Share2, Loader2 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import type { Recibo } from "@/lib/types";
 import { abrirWhatsApp } from "@/lib/whatsapp";
+import { asegurarWhatsAppDispositivo, numeroDeEsteDispositivo, formatoNumero } from "@/lib/whatsappDispositivo";
 import { avisar, avisarError, recordatorio } from "@/lib/alerta";
 import {
   generarImagenRecibo,
@@ -22,18 +23,22 @@ export function ReciboModal({ recibo, onCerrar }: { recibo: Recibo; onCerrar: ()
   const config = useStore((s) => s.config);
   const negocio = negocios.find((n) => n.id === recibo.negocioId)?.nombre ?? "Almacén Diana G";
   const [blob, setBlob] = useState<Blob | null>(null);
+  const [numDispositivo, setNumDispositivo] = useState("");
+  useEffect(() => setNumDispositivo(numeroDeEsteDispositivo()), [config.whatsapp, config.whatsapp2]);
+  // El recibo muestra el WhatsApp con el que trabaja este dispositivo (o el principal)
+  const waRecibo = numDispositivo || config.whatsapp;
   const url = useMemo(() => (blob ? URL.createObjectURL(blob) : ""), [blob]);
   useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
 
   useEffect(() => {
     let vivo = true;
-    generarImagenRecibo(recibo, { negocio, politica: config.politicaRecibo, whatsappAlmacen: config.whatsapp })
+    generarImagenRecibo(recibo, { negocio, politica: config.politicaRecibo, whatsappAlmacen: waRecibo })
       .then((b) => vivo && setBlob(b))
       .catch(() => avisarError("No se pudo crear la imagen del recibo"));
     return () => {
       vivo = false;
     };
-  }, [recibo, negocio, config.politicaRecibo, config.whatsapp]);
+  }, [recibo, negocio, config.politicaRecibo, waRecibo]);
 
   const archivo = useMemo(() => (blob ? new File([blob], nombreArchivoRecibo(recibo), { type: "image/png" }) : null), [blob, recibo]);
   const esCelular = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -42,6 +47,8 @@ export function ReciboModal({ recibo, onCerrar }: { recibo: Recibo; onCerrar: ()
 
   async function compartir() {
     if (!archivo) return;
+    if (!(await asegurarWhatsAppDispositivo())) return;
+    setNumDispositivo(numeroDeEsteDispositivo());
     try {
       await navigator.share({ files: [archivo], text: texto });
     } catch (e) {
@@ -51,6 +58,8 @@ export function ReciboModal({ recibo, onCerrar }: { recibo: Recibo; onCerrar: ()
 
   async function enviarPC() {
     if (!blob) return;
+    if (!(await asegurarWhatsAppDispositivo())) return;
+    setNumDispositivo(numeroDeEsteDispositivo());
     // Copiar y abrir el chat dentro del mismo clic (así el navegador no bloquea nada)
     const copia = copiarImagen(blob);
     if (recibo.telefono.trim()) abrirWhatsApp(recibo.telefono, texto);
@@ -119,6 +128,11 @@ export function ReciboModal({ recibo, onCerrar }: { recibo: Recibo; onCerrar: ()
               <Download className="h-4 w-4" /> Descargar imagen
             </Boton>
           </div>
+          {numDispositivo && (
+            <p className="text-center text-xs text-stone-500">
+              Se envía desde el WhatsApp del almacén <b>{formatoNumero(numDispositivo)}</b>
+            </p>
+          )}
           {esCelular && compartible && (
             <p className="text-center text-xs text-stone-400">Elige WhatsApp y luego el chat de {recibo.cliente.trim() || "tu cliente"}.</p>
           )}

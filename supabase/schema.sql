@@ -614,6 +614,8 @@ alter table public.apartados add column if not exists lugar text;
 -- Solo AGREGA una tabla nueva y una columna opcional. No modifica ventas.
 -- ============================================================
 alter table public.configuracion add column if not exists politica_recibo text;
+-- Fase 7i: segundo número de WhatsApp del almacén
+alter table public.configuracion add column if not exists whatsapp2 text;
 
 create table if not exists public.recibos (
   id          uuid primary key default gen_random_uuid(),

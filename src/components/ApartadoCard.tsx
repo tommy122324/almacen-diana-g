@@ -7,6 +7,7 @@ import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { hoyISO } from "@/lib/calc";
 import { avisar, confirmarEliminar, avisarFalta, confirmar } from "@/lib/alerta";
 import { abrirWhatsApp, mensajePedidoLlego } from "@/lib/whatsapp";
+import { asegurarWhatsAppDispositivo } from "@/lib/whatsappDispositivo";
 import { MoneyInput } from "@/components/MoneyInput";
 import { Card, Boton, Input, Field, Chip, Select, inputCls } from "@/components/ui";
 
@@ -222,8 +223,14 @@ export function ApartadoCard({ apartado, onEliminar, puedeAdmin, onEntregado }: 
                     "Sí, entregar",
                   );
                   if (!ok) return;
-                  // Abrir WhatsApp (el clic en "Sí" cuenta como gesto) y marcar entregado
-                  if (apartado.telefono) abrirWhatsApp(apartado.telefono, mensajePedidoLlego(apartado.descripcion));
+                  // Verificar que este dispositivo tenga un WhatsApp del almacén
+                  if (apartado.telefono) {
+                    if (await asegurarWhatsAppDispositivo()) {
+                      abrirWhatsApp(apartado.telefono, mensajePedidoLlego(apartado.descripcion));
+                    } else if (!(await confirmar("¿Entregar sin avisar?", "No se envió el WhatsApp. ¿Quieres marcar el pedido como entregado de todas formas?", "Sí, entregar"))) {
+                      return;
+                    }
+                  }
                   marcarEntregado(apartado.id, true);
                   avisar("¡Pedido entregado! ✅");
                   onEntregado?.();
@@ -239,7 +246,7 @@ export function ApartadoCard({ apartado, onEliminar, puedeAdmin, onEntregado }: 
           {apartado.entregado && (
             <>
               {apartado.telefono && (
-                <Boton variant="outline" onClick={() => abrirWhatsApp(apartado.telefono, mensajePedidoLlego(apartado.descripcion))}>
+                <Boton variant="outline" onClick={async () => { if (await asegurarWhatsAppDispositivo()) abrirWhatsApp(apartado.telefono, mensajePedidoLlego(apartado.descripcion)); }}>
                   <MessageCircle className="h-4 w-4" /> Reenviar WhatsApp
                 </Boton>
               )}

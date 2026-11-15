@@ -124,7 +124,8 @@ export interface Meta {
 }
 
 export interface Configuracion {
-  whatsapp: string; // número de WhatsApp del almacén
+  whatsapp: string; // número de WhatsApp del almacén (principal)
+  whatsapp2?: string; // segundo número de WhatsApp del almacén (opcional)
   correoCodigos: string; // correo a donde llegan los códigos (Fase 7)
   salarioMinimo: number; // salario mínimo mensual (para calcular descuentos por retraso)
   politicaRecibo?: string; // texto de cambios/garantía que sale en el recibo

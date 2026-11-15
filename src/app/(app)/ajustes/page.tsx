@@ -4,6 +4,7 @@ import { ReceiptText, MessageCircle, Save, Check, Lock, KeyRound, RefreshCw, Tra
 import { useStore } from "@/lib/store";
 import { avisar, avisarError, confirmar } from "@/lib/alerta";
 import { telefonoWhatsApp } from "@/lib/whatsapp";
+import { numerosAlmacen, numeroDeEsteDispositivo, guardarNumeroDispositivo, formatoNumero } from "@/lib/whatsappDispositivo";
 import { generarCodigo, codigoActivo, cancelarCodigo } from "@/lib/db";
 import { descargarRespaldoJSON, descargarRespaldoExcel, restaurarRespaldoDesdeArchivo } from "@/lib/backup";
 import { Card, Boton, Input, Field, inputCls } from "@/components/ui";
@@ -17,11 +18,14 @@ export default function Ajustes() {
   const setConfig = useStore((s) => s.setConfig);
 
   const [whatsapp, setWhatsapp] = useState(config.whatsapp);
+  const [whatsapp2, setWhatsapp2] = useState(config.whatsapp2 ?? "");
   const [salario, setSalario] = useState(config.salarioMinimo);
   const [guardado, setGuardado] = useState(false);
 
   async function guardar() {
-    await setConfig({ whatsapp: whatsapp.trim(), salarioMinimo: salario });
+    const w2 = whatsapp2.trim();
+    // whatsapp2 solo se envía si cambió (así guardar nunca falla por esa columna)
+    await setConfig({ whatsapp: whatsapp.trim(), salarioMinimo: salario, ...(w2 !== (config.whatsapp2 ?? "") ? { whatsapp2: w2 } : {}) });
     setGuardado(true);
     avisar("Configuración guardada");
     setTimeout(() => setGuardado(false), 2500);
@@ -53,7 +57,7 @@ export default function Ajustes() {
           <MessageCircle className="h-5 w-5 text-emerald-600" /> WhatsApp del almacén
         </div>
 
-        <Field label="Número de WhatsApp (celular colombiano, 10 dígitos)">
+        <Field label="WhatsApp principal (celular colombiano, 10 dígitos)">
           <Input
             value={whatsapp}
             onChange={(e) => setWhatsapp(e.target.value)}
@@ -67,6 +71,19 @@ export default function Ajustes() {
             Se usará como: <span className="font-semibold text-stone-700">+{numeroFormateado}</span>
           </p>
         )}
+
+        <div className="mt-4">
+          <Field label="Segundo WhatsApp del almacén (opcional)">
+            <Input value={whatsapp2} onChange={(e) => setWhatsapp2(e.target.value)} inputMode="tel" placeholder="Ej: 310 987 6543" />
+          </Field>
+          {whatsapp2.trim() && (
+            <p className="mt-2 text-xs text-stone-500">
+              Se usará como: <span className="font-semibold text-stone-700">+{telefonoWhatsApp(whatsapp2)}</span>
+            </p>
+          )}
+        </div>
+
+        <WhatsAppDeEsteDispositivo />
 
         <div className="mt-4">
           <Field label="Salario mínimo mensual (para el descuento por retraso)">
@@ -284,5 +301,36 @@ function PoliticaRecibo() {
         </Boton>
       </div>
     </Card>
+  );
+}
+
+/** Con cuál WhatsApp del almacén trabaja ESTE dispositivo (se guarda solo aquí). */
+function WhatsAppDeEsteDispositivo() {
+  const config = useStore((s) => s.config);
+  const numeros = numerosAlmacen(config);
+  const [actual, setActual] = useState("");
+  useEffect(() => setActual(numeroDeEsteDispositivo()), [config.whatsapp, config.whatsapp2]);
+  if (numeros.length === 0) return null;
+  return (
+    <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3">
+      <div className="text-sm font-semibold text-stone-800">📱 Este dispositivo envía desde:</div>
+      <p className="mb-2 text-xs text-stone-500">
+        Elige el WhatsApp que tienes abierto en ESTE celular o computador. Si no es ninguno, no se dejará enviar mensajes desde aquí.
+      </p>
+      <select
+        value={actual}
+        onChange={(e) => {
+          guardarNumeroDispositivo(e.target.value);
+          setActual(e.target.value);
+          avisar(e.target.value ? "Dispositivo actualizado" : "Se preguntará al enviar");
+        }}
+        className={`${inputCls} cursor-pointer font-medium`}
+      >
+        <option value="">Sin elegir (preguntar al enviar)</option>
+        {numeros.map((n, i) => (
+          <option key={n} value={n}>{i === 0 ? "Principal" : "Número 2"}: {formatoNumero(n)}</option>
+        ))}
+      </select>
+    </div>
   );
 }
