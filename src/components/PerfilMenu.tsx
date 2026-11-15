@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { User, LogOut, FileBarChart, Settings, Receipt, ReceiptText } from "lucide-react";
+import { User, LogOut, FileBarChart, Settings, Receipt, ReceiptText, Truck, CalendarDays } from "lucide-react";
 import { useStore } from "@/lib/store";
 
 /** Botón de perfil (celular): abre Reportes, Ajustes y Cerrar sesión. */
@@ -37,6 +37,12 @@ export function PerfilMenu({ onSalir }: { onSalir: () => void }) {
             <>
               <Link href="/recibos" onClick={() => setAbierto(false)} className={`${item} ${path === "/recibos" ? "text-amber-700" : "text-stone-600"}`}>
                 <ReceiptText className="h-4 w-4" /> Recibos
+              </Link>
+              <Link href="/proveedores" onClick={() => setAbierto(false)} className={`${item} ${path === "/proveedores" ? "text-amber-700" : "text-stone-600"}`}>
+                <Truck className="h-4 w-4" /> Proveedores
+              </Link>
+              <Link href="/temporadas" onClick={() => setAbierto(false)} className={`${item} ${path === "/temporadas" ? "text-amber-700" : "text-stone-600"}`}>
+                <CalendarDays className="h-4 w-4" /> Temporadas
               </Link>
               <Link href="/gastos-mensuales" onClick={() => setAbierto(false)} className={`${item} ${path === "/gastos-mensuales" ? "text-amber-700" : "text-stone-600"}`}>
                 <Receipt className="h-4 w-4" /> Gastos Mensuales

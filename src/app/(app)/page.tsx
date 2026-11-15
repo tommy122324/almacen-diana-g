@@ -7,6 +7,7 @@ import { StatCard, Card, Boton, Input } from "@/components/ui";
 import { VentasBarChart, MetodosPieChart, ComparativoChart } from "@/components/Charts";
 import { MoneyInput } from "@/components/MoneyInput";
 import { AnalisisInteligente } from "@/components/AnalisisInteligente";
+import { AvisosPanel } from "@/components/AvisosPanel";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { METODO_LABEL, type MetodoPago } from "@/lib/types";
 import { avisar } from "@/lib/alerta";
@@ -183,6 +184,8 @@ export default function Panel() {
           <span className="rounded-xl bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-800">Hoy</span>
         )}
       </div>
+
+      {esAdmin && <AvisosPanel />}
 
       {cargandoRango && <p className="text-xs text-stone-400">Cargando historial…</p>}
 
