@@ -45,7 +45,7 @@ export function Nav({ barra = false }: { barra?: boolean }) {
               activo ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/25" : "text-stone-500 hover:bg-amber-50 hover:text-amber-800",
             )}
           >
-            <Icon className="h-5 w-5 shrink-0 md:h-4 md:w-4" />
+            <Icon className={clsx("h-5 w-5 shrink-0 md:h-4 md:w-4", activo && "cb-pop")} />
             <span className="md:hidden">{etiquetaCorta}</span>
             <span className="hidden md:inline">{etiqueta}</span>
           </Link>

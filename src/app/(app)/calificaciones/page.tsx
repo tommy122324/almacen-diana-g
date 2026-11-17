@@ -182,7 +182,7 @@ export default function Calificaciones() {
             )}
           </div>
 
-          <div className="space-y-3">
+          <div className="cb-lista space-y-3">
             {visibles.map((r) => (
               <Card key={r.id} className={`p-4 ${(r.calificacion ?? 0) <= 2 ? "!border-rose-200" : ""}`}>
                 <div className="flex items-start gap-3">

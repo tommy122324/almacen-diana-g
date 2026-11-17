@@ -38,6 +38,8 @@ export async function obtenerReciboPublico(id: string): Promise<ReciboPublico | 
       reclamoEn: null,
       calificacion: r.calificacion != null ? Number(r.calificacion) : null,
       comentario: r.comentario ? s(r.comentario) : null,
+      tipo: r.tipo === "apartado" || r.tipo === "pedido" ? r.tipo : "venta",
+      abonado: r.abonado != null ? Number(r.abonado) : null,
       creadoEn: s(r.creado_en),
     },
     negocio: s(r.negocio) || "Almacén",

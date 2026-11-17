@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { suscribirCambios } from "@/lib/realtime";
@@ -22,6 +22,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated();
   const storeHydrated = useStoreHydrated();
   const router = useRouter();
+  const pathname = usePathname();
   const [autorizado, setAutorizado] = useState(false);
   const [desbloqueado, setDesbloqueado] = useState(false);
   const cargando = useStore((s) => s.cargando);
@@ -79,7 +80,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!hydrated || !storeHydrated || !autorizado || (cargando && !cargado)) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-stone-50">
-        <div className="text-4xl">🐝</div>
+        <div className="animate-bounce text-4xl">🐝</div>
         <div className="text-sm text-stone-400">Cargando tu negocio…</div>
       </div>
     );
@@ -106,7 +107,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Barra lateral (escritorio) */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-5 border-r border-amber-100 bg-white/80 p-4 backdrop-blur md:flex">
         <div className="flex items-center gap-2 px-1 pt-1">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-400 text-xl shadow-md shadow-orange-500/20">🐝</span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-300 to-orange-400 text-xl shadow-md shadow-orange-500/20"><span className="cb-flotar inline-block">🐝</span></span>
           <span className="truncate text-lg font-extrabold tracking-tight text-stone-800">{nombreNegocio}</span>
         </div>
         <BusinessSelector />
@@ -134,7 +135,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <PerfilMenu onSalir={salir} />
         </header>
 
-        <main className="mx-auto w-full max-w-5xl flex-1 p-4 pb-24 md:p-8 md:pb-8">{children}</main>
+        <main className="mx-auto w-full max-w-5xl flex-1 p-4 pb-24 md:p-8 md:pb-8"><div key={pathname} className="cb-pagina">
+            {children}
+          </div>
+        </main>
 
         {/* Barra inferior (celular) */}
         <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-amber-100 bg-white/90 p-2 shadow-[0_-4px_20px_-8px_rgba(154,52,18,0.15)] backdrop-blur md:hidden">

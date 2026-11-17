@@ -17,6 +17,7 @@ import type {
   Cuadre,
   Configuracion,
   Recibo,
+  TipoRecibo,
   RegistroHora,
   Tarea,
   OpPendiente,
@@ -403,6 +404,9 @@ function mRecibo(r: Row): Recibo {
     calificacion: r.calificacion != null ? n(r.calificacion) : null,
     comentario: r.comentario ? s(r.comentario) : null,
     calificadoEn: r.calificado_en ? s(r.calificado_en) : null,
+    tipo: r.tipo === "apartado" || r.tipo === "pedido" ? r.tipo : "venta",
+    apartadoId: r.apartado_id ? s(r.apartado_id) : null,
+    abonado: r.abonado != null ? n(r.abonado) : null,
     creadoEn: s(r.creado_en),
   };
 }
@@ -426,6 +430,9 @@ export async function crearRecibo(d: {
   metodo: MetodoPago;
   total: number;
   atendio: string;
+  tipo?: TipoRecibo;
+  apartadoId?: string | null;
+  abonado?: number;
 }): Promise<Recibo> {
   const { data, error } = await db().rpc("crear_recibo", {
     p_id: d.id,
@@ -440,7 +447,34 @@ export async function crearRecibo(d: {
     p_atendio: d.atendio,
   });
   if (error) throw error;
-  return mRecibo(data as Row);
+  const rec = mRecibo(data as Row);
+  // Apartados y pedidos: se marca el tipo (si falla, se borra para no dejar un recibo mal clasificado)
+  if (d.tipo && d.tipo !== "venta") {
+    const extra = { tipo: d.tipo, apartado_id: d.apartadoId ?? null, abonado: d.abonado ?? 0 };
+    const { error: e2 } = await db().from("recibos").update(extra).eq("id", rec.id);
+    if (e2) {
+      await db().from("recibos").delete().eq("id", rec.id);
+      throw e2;
+    }
+    return { ...rec, tipo: d.tipo, apartadoId: d.apartadoId ?? null, abonado: d.abonado ?? 0 };
+  }
+  return rec;
+}
+
+/** Último recibo generado para un apartado/pedido (o null). */
+export async function reciboDeApartado(apartadoId: string): Promise<Recibo | null> {
+  const { data, error } = await db().from("recibos").select("*").eq("apartado_id", apartadoId).order("creado_en", { ascending: false }).limit(1);
+  if (error) throw error;
+  return data?.[0] ? mRecibo(data[0] as Row) : null;
+}
+
+/** Actualiza el recibo de un apartado/pedido con sus datos y abonos actuales. */
+export async function sincronizarReciboApartado(
+  id: string,
+  p: { cliente: string; telefono: string; detalle: string; total: number; abonado: number; metodo: MetodoPago },
+): Promise<void> {
+  const { error } = await db().from("recibos").update(p).eq("id", id);
+  if (error) throw error;
 }
 
 export async function listarRecibos(negocioId: string, desde: string, hasta: string): Promise<Recibo[]> {

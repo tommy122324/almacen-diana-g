@@ -1,5 +1,8 @@
 "use client";
 import { METODO_LABEL, POLITICA_RECIBO_DEFECTO, type Recibo } from "./types";
+
+import { tipoRecibo, saldoRecibo, tituloRecibo, graciasRecibo, detalleRecibo } from "./reciboTipo";
+export { tipoRecibo, saldoRecibo, tituloRecibo, graciasRecibo, detalleRecibo, TIPO_RECIBO_LABEL } from "./reciboTipo";
 import { formatCOP, formatFechaLarga } from "./format";
 import { telefonoWhatsApp } from "./whatsapp";
 
@@ -37,6 +40,12 @@ export async function generarImagenRecibo(r: Recibo, op: OpcionesImagen): Promis
   if (r.telefono.trim()) filas.push(["WhatsApp", r.telefono.trim()]);
   filas.push(["Método de pago", METODO_LABEL[r.metodo] ?? r.metodo]);
   if (r.atendio.trim()) filas.push(["Te atendió", r.atendio.trim()]);
+  const esVenta = tipoRecibo(r) === "venta";
+  if (!esVenta) {
+    const { abonado, saldo } = saldoRecibo(r);
+    filas.push(["Abonado", formatCOP(abonado)]);
+    filas.push(["Saldo pendiente", saldo > 0 ? formatCOP(saldo) : "Pagado ✓"]);
+  }
 
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d")!;
@@ -113,7 +122,7 @@ export async function generarImagenRecibo(r: Recibo, op: OpcionesImagen): Promis
       ctx.fillText(ajustar(op.negocio, f(800, 50), CW), W / 2, PAD + 205);
       ctx.font = f(600, 28);
       ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.fillText("RECIBO DE COMPRA", W / 2, PAD + 250);
+      ctx.fillText(tituloRecibo(r), W / 2, PAD + 250);
     }
     y = PAD + HEADER + 60;
 
@@ -168,7 +177,7 @@ export async function generarImagenRecibo(r: Recibo, op: OpcionesImagen): Promis
         ctx.textAlign = "left";
         ctx.font = f(700, 24);
         ctx.fillStyle = "#a8a29e";
-        ctx.fillText("🛍️  DETALLE DE LA COMPRA", X0 + IN + 24, y + 6);
+        ctx.fillText(`🛍️  ${detalleRecibo(r)}`, X0 + IN + 24, y + 6);
         ctx.font = f(500, 30);
         ctx.fillStyle = "#44403c";
         ls.forEach((l, i) => ctx.fillText(l, X0 + IN + 24, y + 52 + i * 42));
@@ -188,7 +197,7 @@ export async function generarImagenRecibo(r: Recibo, op: OpcionesImagen): Promis
       ctx.textAlign = "left";
       ctx.font = f(700, 30);
       ctx.fillStyle = "#9a3412";
-      ctx.fillText("TOTAL", X0 + IN + 36, y + 76);
+      ctx.fillText(esVenta ? "TOTAL" : "VALOR TOTAL", X0 + IN + 36, y + 76);
       ctx.textAlign = "right";
       ctx.font = f(800, 60);
       ctx.fillStyle = "#c2410c";
@@ -219,7 +228,7 @@ export async function generarImagenRecibo(r: Recibo, op: OpcionesImagen): Promis
       ctx.textAlign = "center";
       ctx.font = f(800, 36);
       ctx.fillStyle = "#ea580c";
-      ctx.fillText("¡Gracias por tu compra! 💛", W / 2, y + 10);
+      ctx.fillText(graciasRecibo(r), W / 2, y + 10);
       ctx.font = f(500, 24);
       ctx.fillStyle = "#a8a29e";
       ctx.fillText("Conserva este recibo para cualquier cambio o reclamo.", W / 2, y + 56);
@@ -293,11 +302,19 @@ export function linkRecibo(r: Recibo) {
  */
 export function mensajeRecibo(r: Recibo, negocio: string, conLink = true) {
   const nombre = r.cliente.trim();
-  const lineas = [
-    `Hola${nombre ? ` ${nombre}` : ""}, gracias por tu compra en ${negocio}.`,
-    "",
-    `Aquí está tu recibo N° ${numeroRecibo(r.numero)} por ${formatCOP(r.total)}:`,
-  ];
+  const tipo = tipoRecibo(r);
+  const { abonado, saldo } = saldoRecibo(r);
+  const lineas =
+    tipo === "venta"
+      ? [`Hola${nombre ? ` ${nombre}` : ""}, gracias por tu compra en ${negocio}.`, "", `Aquí está tu recibo N° ${numeroRecibo(r.numero)} por ${formatCOP(r.total)}:`]
+      : [
+          `Hola${nombre ? ` ${nombre}` : ""}, gracias por ${tipo === "apartado" ? "apartar" : "tu pedido"} en ${negocio}.`,
+          "",
+          `Recibo de ${tipo} N° ${numeroRecibo(r.numero)}`,
+          `Valor: ${formatCOP(r.total)} | Abonado: ${formatCOP(abonado)} | ${saldo > 0 ? `Saldo: ${formatCOP(saldo)}` : "Pagado"}`,
+          "",
+          "Aquí lo puedes ver:",
+        ];
   if (conLink) lineas.push(linkRecibo(r));
   lineas.push("", "Guárdalo para cualquier cambio o reclamo. En el mismo enlace puedes calificar cómo te atendimos.", "", "¡Te esperamos pronto!");
   return lineas.join("\n");

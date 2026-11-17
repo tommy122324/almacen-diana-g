@@ -177,7 +177,7 @@ export default function Proveedores() {
           <p className="text-center text-sm text-stone-500">Aún no tienes proveedores. Agrega el primero para llevar lo que les debes.</p>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="cb-lista space-y-3">
           {proveedores.map((p) => (
             <TarjetaProveedor
               key={p.id}

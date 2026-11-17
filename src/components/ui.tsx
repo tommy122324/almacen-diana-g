@@ -1,6 +1,6 @@
 "use client";
 import { clsx } from "clsx";
-import type { ReactNode, SelectHTMLAttributes, InputHTMLAttributes } from "react";
+import { useEffect, useRef, useState, type ReactNode, type SelectHTMLAttributes, type InputHTMLAttributes } from "react";
 import { ChevronDown } from "lucide-react";
 import { formatCOP } from "@/lib/format";
 
@@ -10,7 +10,7 @@ export const inputCls =
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={clsx("rounded-2xl border border-amber-100/80 bg-white p-5 shadow-[0_1px_2px_rgba(120,53,15,0.04),0_8px_24px_-12px_rgba(120,53,15,0.12)]", className)}>
+    <div className={clsx("cb-card rounded-2xl border border-amber-100/80 bg-white p-5 shadow-[0_1px_2px_rgba(120,53,15,0.04),0_8px_24px_-12px_rgba(120,53,15,0.12)]", className)}>
       {children}
     </div>
   );
@@ -51,6 +51,29 @@ const TONOS = {
   sky: "text-sky-600",
 } as const;
 
+/** Número que "cuenta" hasta su valor (requestAnimationFrame, ~0,6 s). */
+function useContador(valor: number) {
+  const [v, setV] = useState(0);
+  const prev = useRef(0);
+  useEffect(() => {
+    const desde = prev.current;
+    prev.current = valor;
+    if (desde === valor) return setV(valor);
+    if (typeof window === "undefined" || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return setV(valor);
+    let raf = 0;
+    const t0 = performance.now();
+    const paso = (t: number) => {
+      const p = Math.min(1, (t - t0) / 650);
+      const e = 1 - Math.pow(1 - p, 3);
+      setV(Math.round(desde + (valor - desde) * e));
+      if (p < 1) raf = requestAnimationFrame(paso);
+    };
+    raf = requestAnimationFrame(paso);
+    return () => cancelAnimationFrame(raf);
+  }, [valor]);
+  return v;
+}
+
 export function StatCard({
   label,
   value,
@@ -64,11 +87,12 @@ export function StatCard({
   tone?: keyof typeof TONOS;
   esConteo?: boolean; // muestra un número simple (no pesos)
 }) {
+  const mostrado = useContador(value);
   return (
-    <Card className="relative overflow-hidden p-4">
-      <span className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-full bg-amber-100/50" />
+    <Card className="cb-elevar group relative overflow-hidden p-4">
+      <span className="pointer-events-none absolute -right-6 -top-6 h-16 w-16 rounded-full bg-amber-100/50 transition-transform duration-500 group-hover:scale-150" />
       <div className="relative text-xs font-semibold uppercase tracking-wide text-stone-400">{label}</div>
-      <div className={clsx("relative mt-1 text-2xl font-bold tabular-nums", TONOS[tone])}>{esConteo ? value : formatCOP(value)}</div>
+      <div className={clsx("relative mt-1 text-2xl font-bold tabular-nums", TONOS[tone])}>{esConteo ? mostrado : formatCOP(mostrado)}</div>
       {hint && <div className="relative mt-0.5 text-xs text-stone-400">{hint}</div>}
     </Card>
   );
@@ -90,7 +114,7 @@ export function Boton({
   disabled?: boolean;
 }) {
   const variants = {
-    primary: "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/25 hover:from-amber-600 hover:to-orange-600",
+    primary: "cb-brillo bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/25 hover:from-amber-600 hover:to-orange-600 hover:shadow-lg hover:shadow-orange-500/30",
     outline: "border border-amber-200 bg-white text-stone-700 hover:border-amber-300 hover:bg-amber-50",
     ghost: "text-stone-500 hover:bg-amber-50 hover:text-amber-800",
     danger: "text-rose-600 hover:bg-rose-50",

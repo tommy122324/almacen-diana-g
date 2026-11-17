@@ -84,8 +84,8 @@ export function ReciboModal({ recibo, onCerrar }: { recibo: Recibo; onCerrar: ()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 backdrop-blur-sm sm:items-center" onClick={onCerrar}>
-      <div className="flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <div className="cb-fondo fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 backdrop-blur-sm sm:items-center" onClick={onCerrar}>
+      <div className="cb-modal flex max-h-[94vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-amber-100 px-5 py-3">
           <div>
             <div className="text-xs font-semibold uppercase tracking-wide text-stone-400">Recibo</div>

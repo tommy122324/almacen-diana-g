@@ -5,6 +5,11 @@ import { useStore, abonadoDe, saldoDe } from "@/lib/store";
 import { METODOS, METODO_LABEL, type Apartado, type MetodoPago } from "@/lib/types";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { hoyISO } from "@/lib/calc";
+import { avisarError } from "@/lib/alerta";
+import { ReciboModal } from "@/components/ReciboModal";
+import { ultimoAtendio } from "@/components/CamposRecibo";
+import { reciboParaApartado, errorRecibo } from "@/lib/reciboApartado";
+import type { Recibo } from "@/lib/types";
 import { avisar, avisarFalta, confirmarEliminar } from "@/lib/alerta";
 import { exportarPedidosPDF, exportarPedidosPorLugarPDF } from "@/lib/export";
 import { MoneyInput } from "@/components/MoneyInput";
@@ -44,6 +49,21 @@ export default function Pedidos() {
   const negocios = useStore((s) => s.negocios);
   const apartados = useStore((s) => s.apartados);
   const agregar = useStore((s) => s.agregarApartado);
+  const miNombre = useStore((s) => s.miNombre);
+  const [conRecibo, setConRecibo] = useState(false);
+  const [reciboNuevo, setReciboNuevo] = useState<Recibo | null>(null);
+
+  /** Genera el recibo del apartado/pedido recién guardado. */
+  async function reciboDe(id: string | undefined) {
+    const ap = id ? useStore.getState().apartados.find((a) => a.id === id) : undefined;
+    if (!ap) return;
+    try {
+      setReciboNuevo(await reciboParaApartado(ap, ultimoAtendio() || miNombre));
+    } catch (e) {
+      console.error(e);
+      avisarError(errorRecibo(e));
+    }
+  }
   const eliminar = useStore((s) => s.eliminarApartado);
   const moverPedido = useStore((s) => s.moverPedido);
 
@@ -108,7 +128,7 @@ export default function Pedidos() {
   const buscando = busqueda.trim().length > 0;
   const abierto = abiertoId ? apartados.find((a) => a.id === abiertoId) : undefined;
 
-  function add() {
+  async function add() {
     if (!cliente.trim()) {
       avisarFalta("Falta el nombre del cliente.");
       return;
@@ -117,7 +137,7 @@ export default function Pedidos() {
       avisarFalta("Describe qué pidió el cliente.");
       return;
     }
-    agregar({ tipo: "pedido", descripcion, fecha, cliente, telefono, valorTotal, abonoInicial, metodoInicial, lugar });
+    const nuevoId = await agregar({ tipo: "pedido", descripcion, fecha, cliente, telefono, valorTotal, abonoInicial, metodoInicial, lugar });
     setDescripcion("");
     setCliente("");
     setTelefono("");
@@ -126,6 +146,7 @@ export default function Pedidos() {
     setAbonoInicial(0);
     setMetodoInicial("efectivo");
     avisar("Pedido registrado");
+    if (esAdmin && conRecibo) await reciboDe(nuevoId);
   }
 
   function mover(id: string, destino: string) {
@@ -179,6 +200,7 @@ export default function Pedidos() {
 
   return (
     <div className="space-y-5">
+      {reciboNuevo && <ReciboModal recibo={reciboNuevo} onCerrar={() => setReciboNuevo(null)} />}
       <h1 className="text-2xl font-bold text-stone-800">Pedidos</h1>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -235,6 +257,12 @@ export default function Pedidos() {
             </Select>
           </Field>
         </div>
+        {esAdmin && (
+          <label className="mt-4 flex cursor-pointer items-center gap-2 rounded-xl bg-amber-50/70 px-3 py-2.5 text-sm font-medium text-stone-700 ring-1 ring-amber-100">
+            <input type="checkbox" checked={conRecibo} onChange={(e) => setConRecibo(e.target.checked)} className="h-4 w-4 accent-orange-500" />
+            Generar recibo para el cliente al guardar
+          </label>
+        )}
         <div className="mt-4">
           <Boton onClick={add}>
             <Plus className="h-4 w-4" /> Registrar pedido
@@ -416,8 +444,8 @@ export default function Pedidos() {
 
       {/* Detalle del pedido (abonos, conseguir, entregar, editar) */}
       {abierto && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 sm:items-center" onClick={() => setAbiertoId(null)}>
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="cb-fondo fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 backdrop-blur-sm sm:items-center" onClick={() => setAbiertoId(null)}>
+          <div className="cb-modal max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex justify-end">
               <button onClick={() => setAbiertoId(null)} className="rounded-full bg-white p-1.5 text-stone-500 shadow hover:text-rose-500" aria-label="Cerrar">
                 <X className="h-5 w-5" />

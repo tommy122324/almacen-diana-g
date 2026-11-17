@@ -116,7 +116,7 @@ export default function Temporadas() {
         </Card>
       )}
 
-      <div className="grid gap-3 md:grid-cols-2">
+      <div className="cb-lista grid gap-3 md:grid-cols-2">
         {proximas.map((t) => (
           <TarjetaTemporada key={t.id} t={t} hoy={hoy} porDia={porDia} />
         ))}

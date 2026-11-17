@@ -148,8 +148,13 @@ export interface Recibo {
   calificacion?: number | null; // 1 a 5 estrellas (la pone el cliente)
   comentario?: string | null;
   calificadoEn?: string | null;
+  tipo?: TipoRecibo; // venta (por defecto), apartado o pedido
+  apartadoId?: string | null;
+  abonado?: number | null; // apartados/pedidos: lo abonado al generar el recibo
   creadoEn: string;
 }
+
+export type TipoRecibo = "venta" | "apartado" | "pedido";
 
 export const POLITICA_RECIBO_DEFECTO =
   "Cambios dentro de los 8 días siguientes a la compra, presentando este recibo y la prenda con su etiqueta, sin uso ni lavado.";

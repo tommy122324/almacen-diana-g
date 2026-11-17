@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Trash2, Phone, ChevronDown, ChevronUp, ChevronRight, CircleDollarSign, Pencil, Check, X, Package, ClipboardList, PackageCheck, RotateCcw, MessageCircle, MapPin } from "lucide-react";
+import { Trash2, Phone, ChevronDown, ChevronUp, ChevronRight, CircleDollarSign, Pencil, Check, X, Package, ClipboardList, PackageCheck, RotateCcw, MessageCircle, MapPin, ReceiptText, Loader2 } from "lucide-react";
 import { useStore, abonadoDe, saldoDe } from "@/lib/store";
 import { METODOS, METODO_LABEL, type Apartado, type MetodoPago } from "@/lib/types";
 import { formatCOP, formatFechaCorta } from "@/lib/format";
@@ -9,6 +9,11 @@ import { avisar, confirmarEliminar, avisarFalta, confirmar } from "@/lib/alerta"
 import { abrirWhatsApp, mensajePedidoLlego } from "@/lib/whatsapp";
 import { asegurarWhatsAppDispositivo } from "@/lib/whatsappDispositivo";
 import { MoneyInput } from "@/components/MoneyInput";
+import { ReciboModal } from "@/components/ReciboModal";
+import { ultimoAtendio } from "@/components/CamposRecibo";
+import { reciboParaApartado, errorRecibo } from "@/lib/reciboApartado";
+import { avisarError } from "@/lib/alerta";
+import type { Recibo } from "@/lib/types";
 import { Card, Boton, Input, Field, Chip, Select, inputCls } from "@/components/ui";
 
 /** Confirma y elimina un apartado o pedido (con sus abonos). */
@@ -48,7 +53,7 @@ export function ListaPlegable({
         (items.length === 0 ? (
           <p className="px-1 pb-1 text-sm text-stone-400">Nada por aquí. 🎉</p>
         ) : (
-          <div className="space-y-3">
+          <div className="cb-lista space-y-3">
             {items.map((a) => (
               <ApartadoCard key={a.id} apartado={a} onEliminar={() => onEliminar(a)} puedeAdmin={puedeAdmin} />
             ))}
@@ -65,6 +70,10 @@ export function ApartadoCard({ apartado, onEliminar, puedeAdmin, onEntregado }: 
   const marcarConseguido = useStore((s) => s.marcarConseguido);
   const marcarEntregado = useStore((s) => s.marcarEntregado);
   const moverPedido = useStore((s) => s.moverPedido);
+  const esAdmin = useStore((s) => s.esAdmin);
+  const miNombre = useStore((s) => s.miNombre);
+  const [recibo, setRecibo] = useState<Recibo | null>(null);
+  const [generando, setGenerando] = useState(false);
   const [lugarEd, setLugarEd] = useState(apartado.lugar ?? "");
   const [abierto, setAbierto] = useState(false);
   const [monto, setMonto] = useState(0);
@@ -85,6 +94,18 @@ export function ApartadoCard({ apartado, onEliminar, puedeAdmin, onEntregado }: 
   const progreso = conValor ? Math.min(100, (abonado / apartado.valorTotal) * 100) : 0;
   const completado = apartado.estado === "completado";
   const esPedido = apartado.tipo === "pedido";
+
+  async function verRecibo() {
+    setGenerando(true);
+    try {
+      setRecibo(await reciboParaApartado(apartado, ultimoAtendio() || miNombre));
+    } catch (e) {
+      console.error(e);
+      avisarError(errorRecibo(e));
+    } finally {
+      setGenerando(false);
+    }
+  }
 
   function registrarAbono() {
     if (monto <= 0) {
@@ -152,6 +173,7 @@ export function ApartadoCard({ apartado, onEliminar, puedeAdmin, onEntregado }: 
 
   return (
     <Card className={completado ? "opacity-80" : ""}>
+      {recibo && <ReciboModal recibo={recibo} onCerrar={() => setRecibo(null)} />}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -188,7 +210,17 @@ export function ApartadoCard({ apartado, onEliminar, puedeAdmin, onEntregado }: 
           </div>
         </div>
         {puedeAdmin && (
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1">
+            {esAdmin && (
+              <button
+                onClick={verRecibo}
+                disabled={generando}
+                title="Recibo para el cliente"
+                className="flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700 ring-1 ring-amber-200 transition hover:bg-amber-100 active:scale-95 disabled:opacity-60"
+              >
+                {generando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ReceiptText className="h-3.5 w-3.5" />} Recibo
+              </button>
+            )}
             <button onClick={() => setEditando(true)} className="text-stone-300 hover:text-amber-600">
               <Pencil className="h-4 w-4" />
             </button>
@@ -266,7 +298,7 @@ export function ApartadoCard({ apartado, onEliminar, puedeAdmin, onEntregado }: 
             <span className="text-stone-500">de {formatCOP(apartado.valorTotal)}</span>
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-stone-100">
-            <div className={`h-full rounded-full transition-all ${completado ? "bg-emerald-500" : "bg-amber-500"}`} style={{ width: `${progreso}%` }} />
+            <div className={`h-full rounded-full transition-all duration-700 ease-out ${completado ? "bg-emerald-500" : "bg-amber-500"}`} style={{ width: `${progreso}%` }} />
           </div>
           <div className="mt-1.5 flex justify-between text-sm">
             <span className="text-stone-400">{progreso.toFixed(0)}%</span>

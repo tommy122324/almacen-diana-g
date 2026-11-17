@@ -9,7 +9,7 @@ import { METODOS, METODO_LABEL, type MetodoPago, type Recibo } from "@/lib/types
 import { formatCOP, formatFechaCorta } from "@/lib/format";
 import { hoyISO } from "@/lib/calc";
 import { avisar, avisarError, avisarFalta, confirmarEliminar } from "@/lib/alerta";
-import { numeroRecibo } from "@/lib/recibo";
+import { numeroRecibo, tipoRecibo, saldoRecibo, TIPO_RECIBO_LABEL } from "@/lib/recibo";
 import { exportarRecibosPDF } from "@/lib/export";
 import { MoneyInput } from "@/components/MoneyInput";
 import { Card, Boton, StatCard, Input, Field, Chip, Select, inputCls } from "@/components/ui";
@@ -28,6 +28,7 @@ export default function Recibos() {
   const [desde, setDesde] = useState(inicioMes());
   const [hasta, setHasta] = useState(hoyISO());
   const [busqueda, setBusqueda] = useState("");
+  const [tipoFiltro, setTipoFiltro] = useState<"todos" | "venta" | "apartado" | "pedido">("todos");
   const [recibos, setRecibos] = useState<Recibo[]>([]);
   const [cargando, setCargando] = useState(true);
   const [errorCarga, setErrorCarga] = useState(false);
@@ -67,15 +68,16 @@ export default function Recibos() {
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    if (!q) return recibos;
+    const base = tipoFiltro === "todos" ? recibos : recibos.filter((r) => tipoRecibo(r) === tipoFiltro);
+    if (!q) return base;
     const dig = q.replace(/\D/g, "");
-    return recibos.filter(
+    return base.filter(
       (r) =>
         r.cliente.toLowerCase().includes(q) ||
         r.detalle.toLowerCase().includes(q) ||
         (dig && (r.telefono.replace(/\D/g, "").includes(dig) || numeroRecibo(r.numero).includes(dig) || String(r.numero) === dig)),
     );
-  }, [recibos, busqueda]);
+  }, [recibos, busqueda, tipoFiltro]);
 
   const totalRango = filtrados.reduce((s, r) => s + r.total, 0);
   const reclamos = filtrados.filter((r) => r.reclamo).length;
@@ -233,6 +235,24 @@ export default function Recibos() {
         )}
       </Card>
 
+      {/* Tipo de recibo */}
+      <div className="flex gap-1 overflow-x-auto rounded-2xl border border-amber-100 bg-white p-1 shadow-sm">
+        {(["todos", "venta", "apartado", "pedido"] as const).map((t) => {
+          const n = t === "todos" ? recibos.length : recibos.filter((r) => tipoRecibo(r) === t).length;
+          const activo = tipoFiltro === t;
+          return (
+            <button
+              key={t}
+              onClick={() => setTipoFiltro(t)}
+              className={`flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-300 ${activo ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-orange-500/25" : "text-stone-500 hover:bg-amber-50 hover:text-amber-800"}`}
+            >
+              {t === "todos" ? "Todos" : t === "venta" ? "Ventas" : t === "apartado" ? "Apartados" : "Pedidos"}
+              <span className={`rounded-full px-1.5 text-[11px] ${activo ? "bg-white/25" : "bg-stone-100"}`}>{n}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Filtros */}
       <div className="flex flex-col gap-2 sm:flex-row">
         <div className="relative flex-1">
@@ -264,7 +284,7 @@ export default function Recibos() {
           <p className="py-4 text-center text-sm text-stone-400">No hay recibos en este rango. 🧾</p>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="cb-lista space-y-3">
           {filtrados.map((r) => (
             <FilaRecibo key={r.id} r={r} onVer={() => setAbierto(r)} onBorrar={() => borrar(r)} onActualizado={actualizarLocal} />
           ))}
@@ -304,6 +324,7 @@ function FilaRecibo({ r, onVer, onBorrar, onActualizado }: { r: Recibo; onVer: (
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-stone-800">{r.cliente || "Cliente"}</span>
+            {tipoRecibo(r) !== "venta" && <Chip tone={tipoRecibo(r) === "pedido" ? "green" : "amber"}>{TIPO_RECIBO_LABEL[tipoRecibo(r)]}</Chip>}
             <Chip tone="stone">{METODO_LABEL[r.metodo] ?? r.metodo}</Chip>
             {r.reclamo && <Chip tone="red">Reclamo</Chip>}
             {r.calificacion ? (
@@ -326,6 +347,12 @@ function FilaRecibo({ r, onVer, onBorrar, onActualizado }: { r: Recibo; onVer: (
             {r.atendio && <span>Atendió: {r.atendio}</span>}
           </div>
           {r.detalle && <p className="mt-1 line-clamp-2 text-sm text-stone-600">{r.detalle}</p>}
+          {tipoRecibo(r) !== "venta" && (
+            <p className="mt-1 text-xs text-stone-500">
+              Abonado <b className="text-emerald-600">{formatCOP(saldoRecibo(r).abonado)}</b> · Saldo{" "}
+              <b className={saldoRecibo(r).saldo > 0 ? "text-rose-600" : "text-emerald-600"}>{saldoRecibo(r).saldo > 0 ? formatCOP(saldoRecibo(r).saldo) : "Pagado"}</b>
+            </p>
+          )}
           {r.comentario && <p className="mt-1 rounded-lg bg-amber-50 px-2 py-1 text-xs italic text-stone-600">“{r.comentario}”</p>}
         </div>
         <div className="shrink-0 text-right font-bold tabular-nums text-stone-800">{formatCOP(r.total)}</div>

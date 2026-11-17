@@ -118,7 +118,7 @@ interface State {
     abonoInicial: number;
     metodoInicial: MetodoPago;
     lugar?: string;
-  }) => Promise<void>;
+  }) => Promise<string | undefined>;
   abonarApartado: (id: string, fecha: string, monto: number, metodo: MetodoPago) => Promise<void>;
   editarApartado: (id: string, datos: { cliente: string; telefono: string; fecha: string; valorTotal: number; descripcion: string }) => Promise<void>;
   marcarConseguido: (id: string, conseguido: boolean) => Promise<void>;
@@ -436,6 +436,7 @@ export const useStore = create<State>()(
     // "lugar" solo se envía si se escribió (así los registros sin lugar no cambian en nada).
     get().encolar({ tabla: "apartados", tipo: "insert", payload: { id, negocio_id: negocioId, tipo, descripcion: desc, fecha, cliente: cli, telefono: tel, valor_total: valorTotal, estado, ...(lug ? { lugar: lug } : {}) } });
     if (abonos.length) get().encolar({ tabla: "abonos", tipo: "insert", payload: { id: abonos[0].id, apartado_id: id, fecha, monto: abonoInicial, metodo: metodoInicial } });
+    return id;
   },
   abonarApartado: async (id, fecha, monto, metodo) => {
     if (monto <= 0) return;
