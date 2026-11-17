@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { User, LogOut, FileBarChart, Settings, Receipt, ReceiptText, Truck, CalendarDays, Star } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { BotonSonido } from "@/components/EscenasAbeja";
 
 /** Botón de perfil (celular): abre Reportes, Ajustes y Cerrar sesión. */
 export function PerfilMenu({ onSalir }: { onSalir: () => void }) {
@@ -59,6 +60,7 @@ export function PerfilMenu({ onSalir }: { onSalir: () => void }) {
               <div className="my-1 border-t border-stone-100" />
             </>
           )}
+          <BotonSonido className={`${item} w-full text-stone-600`} />
           <button onClick={() => { setAbierto(false); onSalir(); }} className={`${item} w-full text-rose-600 hover:bg-rose-50`}>
             <LogOut className="h-4 w-4" /> Cerrar sesión
           </button>

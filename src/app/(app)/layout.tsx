@@ -17,6 +17,7 @@ import { EstadoConexion } from "@/components/EstadoConexion";
 import { SincronizadorOffline } from "@/components/SincronizadorOffline";
 import { ActualizacionDisponible } from "@/components/ActualizacionDisponible";
 import { SaludoBienvenida } from "@/components/SaludoBienvenida";
+import { IntroAbeja, DespedidaAbeja, Celebraciones, VigilanteLogros, BotonSonido, DURACION_DESPEDIDA } from "@/components/EscenasAbeja";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const hydrated = useHydrated();
@@ -25,6 +26,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [autorizado, setAutorizado] = useState(false);
   const [desbloqueado, setDesbloqueado] = useState(false);
+  const [despidiendo, setDespidiendo] = useState(false);
   const cargando = useStore((s) => s.cargando);
   const cargado = useStore((s) => s.cargado);
   const esAdmin = useStore((s) => s.esAdmin);
@@ -71,6 +73,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (await confirmar("¿Cerrar sesión?", "Tendrás que volver a ingresar con tu correo y contraseña.", "Sí, cerrar sesión")) {
       sessionStorage.removeItem("cb-desbloqueo");
       sessionStorage.removeItem("cb-saludado");
+      sessionStorage.removeItem("cb-intro");
+      // La abejita se despide antes de cerrar la sesión
+      setDespidiendo(true);
+      await new Promise((r) => setTimeout(r, DURACION_DESPEDIDA));
       await logout();
       limpiar();
       router.replace("/login");
@@ -104,6 +110,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <SincronizadorOffline />
       <ActualizacionDisponible />
       <SaludoBienvenida />
+      <IntroAbeja />
+      <Celebraciones />
+      <VigilanteLogros />
+      {despidiendo && <DespedidaAbeja />}
       {/* Barra lateral (escritorio) */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col gap-5 border-r border-amber-100 bg-white/80 p-4 backdrop-blur md:flex">
         <div className="flex items-center gap-2 px-1 pt-1">
@@ -119,6 +129,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           >
             <LogOut className="h-4 w-4" /> Cerrar sesión
           </button>
+          <BotonSonido className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-stone-500 transition hover:bg-amber-50 hover:text-amber-800" />
           <EstadoConexion />
         </div>
       </aside>

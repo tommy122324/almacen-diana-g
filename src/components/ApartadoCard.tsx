@@ -13,6 +13,7 @@ import { ReciboModal } from "@/components/ReciboModal";
 import { ultimoAtendio } from "@/components/CamposRecibo";
 import { reciboParaApartado, errorRecibo } from "@/lib/reciboApartado";
 import { avisarError } from "@/lib/alerta";
+import { celebrar } from "@/components/EscenasAbeja";
 import type { Recibo } from "@/lib/types";
 import { Card, Boton, Input, Field, Chip, Select, inputCls } from "@/components/ui";
 
@@ -112,10 +113,13 @@ export function ApartadoCard({ apartado, onEliminar, puedeAdmin, onEntregado }: 
       avisarFalta("Escribe el monto del abono.");
       return;
     }
+    const quedaba = saldoDe(apartado);
     abonar(apartado.id, fechaAbono || hoyISO(), monto, metodoAbono);
     setMonto(0);
     setFechaAbono(hoyISO());
-    avisar("Abono registrado");
+    if (apartado.valorTotal > 0 && quedaba > 0 && monto >= quedaba) {
+      celebrar({ tipo: "pagado", emoji: "💰", titulo: `¡${esPedido ? "Pedido" : "Apartado"} pagado completo!`, mensaje: `${apartado.cliente} terminó de pagar.` });
+    } else avisar("Abono registrado");
   }
 
   function guardarEdicion() {
@@ -264,7 +268,7 @@ export function ApartadoCard({ apartado, onEliminar, puedeAdmin, onEntregado }: 
                     }
                   }
                   marcarEntregado(apartado.id, true);
-                  avisar("¡Pedido entregado! ✅");
+                  celebrar({ tipo: "entregado", emoji: "📦", titulo: "¡Pedido entregado!", mensaje: `${apartado.cliente} ya tiene su pedido.` });
                   onEntregado?.();
                 }}
               >
